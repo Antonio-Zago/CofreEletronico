@@ -52,3 +52,11 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Claude Code (configuração local de cada dev)
+.claude/settings.local.json
+
+# Segredos e variáveis de ambiente
+.env
+.env.*
+!.env.example
