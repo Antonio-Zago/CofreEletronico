@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CofreEletronico.Application\CofreEletronico.Application.csproj" />
+    <ProjectReference Include="..\CofreEletronico.Infrastructure\CofreEletronico.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
