@@ -69,7 +69,7 @@ Critérios de aceite:
 
 | Nº Tarefa | Tarefa | Componente | Prioridade | Sprint | Pts | Status |
 |---|---|---|---|---|---|---|
-| T-0201 | Revisar DER conforme modelo de dados revisado e atualizar DER.drawio | Docs | P1 | 1 | 2 | A fazer |
+| T-0201 | Revisar DER conforme modelo de dados revisado e atualizar DER.drawio | Docs | P1 | 1 | 2 | Concluído |
 | T-0202 | Documentar contrato MQTT (tópicos, payloads, QoS, segurança) | Docs | P1 | 1 | 1 | A fazer |
 | T-0203 | Atualizar Fluxograma.drawio com fluxo de locação/pagamento/abertura | Docs | P1 | 1 | 1 | A fazer |
 
