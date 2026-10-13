@@ -1,0 +1,48 @@
+name: cofre-eletronico
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: cofre-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?defina no .env}
+      POSTGRES_USER: ${POSTGRES_USER:?defina no .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina no .env}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: cofre-mosquitto
+    ports:
+      - "${MQTT_BIND_ADDRESS:-0.0.0.0}:${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./infra/mosquitto/config:/mosquitto/config:ro
+      - mosquitto-data:/mosquitto/data
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: cofre-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?defina no .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?defina no .env}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - ./infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  mosquitto-data:
+  pgadmin-data:

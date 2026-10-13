@@ -1,0 +1,30 @@
+# ACL inicial do Mosquitto (T-0102). Refinamento completo: T-0608.
+# Contrato de tópicos (QoS 1): docs/ARQUITETURA.md, seção "Contrato MQTT".
+#
+#   cofre/{estanteId}/cmd     Backend -> ESP32
+#   cofre/{estanteId}/ack     ESP32   -> Backend
+#   cofre/{estanteId}/estado  ESP32   -> Backend (retained)
+#   cofre/{estanteId}/online  ESP32   -> Backend (LWT + heartbeat, retained)
+#
+# Convenção: o USERNAME MQTT de cada ESP32 é o estanteId usado nos tópicos.
+# Usernames de dispositivo devem conter apenas [A-Za-z0-9_-] (sem / + #).
+# O nome "backend" é reservado para a API.
+#
+# Após alterar este arquivo: rodar `infra/mosquitto/criar-usuario.sh --permissoes`
+# (no Linux) e `docker compose kill -s HUP mosquitto` para recarregar.
+
+# --- Backend (API .NET) ------------------------------------------------------
+user backend
+topic write cofre/+/cmd
+topic read  cofre/+/ack
+topic read  cofre/+/estado
+topic read  cofre/+/online
+
+# --- Dispositivos (um ESP32 por estante) -------------------------------------
+# %u = username do cliente = estanteId. Regras "pattern" valem para todos os
+# usuários; para o backend elas só casariam com cofre/backend/..., que não é
+# usado.
+pattern read  cofre/%u/cmd
+pattern write cofre/%u/ack
+pattern write cofre/%u/estado
+pattern write cofre/%u/online

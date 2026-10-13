@@ -60,3 +60,10 @@ nunit-*.xml
 .env
 .env.*
 !.env.example
+# Mosquitto: arquivo de senhas gerado por infra/mosquitto/criar-usuario.sh
+infra/mosquitto/config/passwd*
+# Certificados/chaves TLS (T-0608 / T-1202)
+infra/mosquitto/certs/
+
+# Visual Studio (estado local da IDE)
+.vs/

@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Cofre Eletrônico (docker)",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "cofre",
+      "Username": "cofre",
+      "SSLMode": "prefer"
+    }
+  }
+}

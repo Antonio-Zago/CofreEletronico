@@ -51,7 +51,7 @@ Critérios de aceite:
 | Nº Tarefa | Tarefa | Componente | Prioridade | Sprint | Pts | Status |
 |---|---|---|---|---|---|---|
 | T-0101 | Estruturar monorepo: backend/, mobile/, firmware/, docs/, infra/ | Infra | P1 | 1 | 1 | Concluído |
-| T-0102 | docker-compose com PostgreSQL, Mosquitto (mosquitto.conf, passwd, ACL) e pgAdmin | Infra | P1 | 1 | 2 | A fazer |
+| T-0102 | docker-compose com PostgreSQL, Mosquitto (mosquitto.conf, passwd, ACL) e pgAdmin | Infra | P1 | 1 | 2 | Em andamento |
 | T-0103 | Criar solução .NET 8 (Api, Application, Domain, Infrastructure) + projeto de testes xUnit | Backend | P1 | 1 | 2 | Concluído |
 | T-0104 | Criar projeto Flutter (features, Riverpod, go_router, dio, flavors dev/prod) | Mobile | P1 | 1 | 2 | A fazer |
 | T-0105 | Criar projeto PlatformIO para ESP32 (Arduino, PubSubClient, ArduinoJson) | Firmware | P1 | 1 | 1 | A fazer |
