@@ -1,7 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <PropertyGroup>
+    <!-- Segredos locais (ex.: ConnectionStrings:Cofre) via `dotnet user-secrets`. Ver README.md. -->
+    <UserSecretsId>36be139c-f5a4-4b8c-b018-70d774d25edf</UserSecretsId>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Só para o `dotnet ef` (a Api é o startup project). PrivateAssets="all": não flui para quem referencia a Api. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <PackageReference Include="Swashbuckle.AspNetCore" />
   </ItemGroup>
 

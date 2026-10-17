@@ -44,6 +44,14 @@ public class DependencyRulesTests
             "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore", "MQTTnet", "Npgsql");
     }
 
+    [Fact]
+    public void Application_nao_depende_de_EF_Core_nem_Identity()
+    {
+        // Persistência e ASP.NET Identity (Usuario/Papel) ficam só na Infrastructure.
+        AssertSemDependencia(ApplicationAssembly,
+            "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore.Identity");
+    }
+
     private static void AssertSemDependencia(Assembly assembly, params string[] proibidas)
     {
         var resultado = Types.InAssembly(assembly)

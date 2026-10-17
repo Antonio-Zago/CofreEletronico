@@ -86,7 +86,7 @@ Critérios de aceite:
 
 | Nº Tarefa | Tarefa | Componente | Prioridade | Sprint | Pts | Status |
 |---|---|---|---|---|---|---|
-| T-0301 | Configurar ASP.NET Identity + EF Core/Npgsql + migrations iniciais | Backend | P1 | 1 | 3 | A fazer |
+| T-0301 | Configurar ASP.NET Identity + EF Core/Npgsql + migrations iniciais | Backend | P1 | 1 | 3 | Concluído |
 | T-0302 | Endpoints POST /auth/registro, /auth/login, /auth/refresh, /auth/logout | Backend | P1 | 1 | 3 | A fazer |
 | T-0303 | JWT com papéis Usuario/Admin e seed do admin inicial | Backend | P1 | 1 | 2 | A fazer |
 | T-0304 | Validação (FluentValidation) e erros padronizados (ProblemDetails) | Backend | P1 | 2 | 2 | A fazer |

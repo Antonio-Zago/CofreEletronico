@@ -66,14 +66,17 @@ Regras de segurança dos comandos:
 
 | Tabela | Campos principais | Observação |
 |---|---|---|
-| `papeis` | id, nome | 1:N com usuários (no DER atual está 1:1) |
-| `usuarios` | id, nome, email, senha_hash, cpf, telefone, papel_id, criado_em | Gerenciado pelo ASP.NET Identity |
+| `papeis` | id, nome | Papéis do ASP.NET Identity, fixos: `Usuario` e `Admin`. N:N com usuários via `usuarios_papeis` (no DER atual está 1:1) |
+| `usuarios` | id, nome, email (único), senha_hash, cpf (opcional, único quando informado), telefone, criado_em | Usuário do ASP.NET Identity, existe só na Infrastructure; o domínio referencia apenas `usuario_id`. Inclui os campos técnicos do Identity (security_stamp, lockout etc.). CPF pedido só quando necessário (ex.: Pix), por LGPD |
+| `usuarios_papeis` | usuario_id, papel_id | Tabela intermediária do Identity (PK composta). Cadastro recebe `Usuario`; um admin pode ter os dois papéis |
 | `estantes` | id, nome, endereco, latitude, longitude, device_id, segredo_hmac, online, ultimo_heartbeat | Renomeia `estante_cofres` |
 | `cofres` | id, estante_id, numero, canal_rele, tamanho, status | status: livre / reservado / ocupado / manutencao |
 | `tarifas` | id, tamanho, valor_por_hora, tempo_minimo | |
 | `locacoes` | id, usuario_id, cofre_id, inicio, fim_previsto, fim_real, status, valor | Substitui `usuarios_cofres`. status: aguardando_pagamento / ativa / encerrada / cancelada / expirada |
 | `pagamentos` | id, locacao_id, mp_payment_id, qr_code, status, valor, pago_em | Uma locação pode ter vários (extensões) |
 | `eventos_cofre` | id, cofre_id, usuario_id, command_id, acao, resultado, criado_em, respondido_em | Auditoria de todos os comandos |
+
+Convenções: tabelas e colunas em snake_case português; chaves primárias Guid. As tabelas auxiliares do Identity seguem a mesma convenção: `usuarios_claims`, `usuarios_logins`, `usuarios_tokens` e `papeis_claims`.
 
 ## Fluxo de locação
 
