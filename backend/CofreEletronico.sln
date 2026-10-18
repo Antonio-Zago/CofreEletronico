@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CofreEletronico.Domain.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CofreEletronico.Infrastructure.Tests", "tests\CofreEletronico.Infrastructure.Tests\CofreEletronico.Infrastructure.Tests.csproj", "{55091E2B-409D-400A-BC28-50044D476D3F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CofreEletronico.Api.Tests", "tests\CofreEletronico.Api.Tests\CofreEletronico.Api.Tests.csproj", "{96B8B9E0-75FE-46E8-AEDE-7FC99D1A61CE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -64,6 +66,10 @@ Global
 		{55091E2B-409D-400A-BC28-50044D476D3F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{55091E2B-409D-400A-BC28-50044D476D3F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{55091E2B-409D-400A-BC28-50044D476D3F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{96B8B9E0-75FE-46E8-AEDE-7FC99D1A61CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96B8B9E0-75FE-46E8-AEDE-7FC99D1A61CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96B8B9E0-75FE-46E8-AEDE-7FC99D1A61CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96B8B9E0-75FE-46E8-AEDE-7FC99D1A61CE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{D487C387-291D-42B8-A105-B45D060927D6} = {8F5BDE20-D301-4E8D-950D-9CBB295EF65B}
@@ -74,5 +80,6 @@ Global
 		{F61FEB7A-A24F-44DC-80F9-68AB3423171A} = {BDA06D1C-7774-4EDB-8282-D52FF087985B}
 		{7451685F-43B4-4DA8-AD89-3A999B57FBD1} = {BDA06D1C-7774-4EDB-8282-D52FF087985B}
 		{55091E2B-409D-400A-BC28-50044D476D3F} = {BDA06D1C-7774-4EDB-8282-D52FF087985B}
+		{96B8B9E0-75FE-46E8-AEDE-7FC99D1A61CE} = {BDA06D1C-7774-4EDB-8282-D52FF087985B}
 	EndGlobalSection
 EndGlobal

@@ -59,6 +59,16 @@ public class DependencyInjectionTests
     }
 
     [Fact]
+    public void Hash_ficticio_e_preparado_por_hosted_service_na_subida()
+    {
+        using var provider = InfrastructureFixture.CriarProvider();
+
+        var hostedServices = provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>();
+
+        Assert.Contains(hostedServices, s => s.GetType().Name == "PreaquecimentoVerificacaoSenha");
+    }
+
+    [Fact]
     public async Task AplicarMigrations_sem_string_de_conexao_nao_falha()
     {
         using var provider = InfrastructureFixture.CriarProvider(connectionString: null);

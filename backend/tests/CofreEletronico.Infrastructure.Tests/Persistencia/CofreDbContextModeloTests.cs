@@ -1,3 +1,4 @@
+using CofreEletronico.Domain.Autenticacao;
 using CofreEletronico.Infrastructure.Persistencia;
 using CofreEletronico.Infrastructure.Persistencia.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -153,6 +154,54 @@ public sealed class CofreDbContextModeloTests : IDisposable
             .OrderBy(p => p.Item1)
             .ToList();
         Assert.Equal([("Admin", "ADMIN"), ("Usuario", "USUARIO")], nomes);
+    }
+
+    [Fact]
+    public void Refresh_tokens_usa_tabela_e_colunas_do_contrato()
+    {
+        var token = Entidade(typeof(RefreshToken));
+
+        Assert.Equal("refresh_tokens", token.GetTableName());
+
+        var colunas = token.GetProperties().Select(p => p.GetColumnName()).Order().ToArray();
+        Assert.Equal(
+            ["criado_em", "expira_em", "familia_id", "id", "revogado_em", "sessao_expira_em", "substituido_por_id", "token_hash", "usuario_id"],
+            colunas);
+
+        Assert.Equal(64, token.FindProperty(nameof(RefreshToken.TokenHash))!.GetMaxLength());
+        Assert.False(token.FindProperty(nameof(RefreshToken.TokenHash))!.IsNullable);
+        Assert.True(token.FindProperty(nameof(RefreshToken.RevogadoEm))!.IsNullable);
+        Assert.True(token.FindProperty(nameof(RefreshToken.SubstituidoPorId))!.IsNullable);
+        Assert.Equal("timestamp with time zone", token.FindProperty(nameof(RefreshToken.ExpiraEm))!.GetColumnType());
+        Assert.False(token.FindProperty(nameof(RefreshToken.SessaoExpiraEm))!.IsNullable);
+        Assert.Equal("timestamp with time zone", token.FindProperty(nameof(RefreshToken.SessaoExpiraEm))!.GetColumnType());
+    }
+
+    [Theory]
+    [InlineData(nameof(RefreshToken.TokenHash), "ix_refresh_tokens_token_hash", true)]
+    [InlineData(nameof(RefreshToken.FamiliaId), "ix_refresh_tokens_familia_id", false)]
+    [InlineData(nameof(RefreshToken.UsuarioId), "ix_refresh_tokens_usuario_id", false)]
+    public void Refresh_tokens_tem_os_indices_esperados(string propriedade, string nome, bool unico)
+    {
+        var indice = Indice(typeof(RefreshToken), propriedade);
+
+        Assert.Equal(nome, indice.GetDatabaseName());
+        Assert.Equal(unico, indice.IsUnique);
+    }
+
+    [Fact]
+    public void Refresh_tokens_referencia_usuarios_com_cascade_e_a_si_mesmo()
+    {
+        var fks = Entidade(typeof(RefreshToken)).GetForeignKeys().ToList();
+
+        var usuario = fks.Single(fk => fk.PrincipalEntityType.ClrType == typeof(Usuario));
+        Assert.Equal(nameof(RefreshToken.UsuarioId), usuario.Properties.Single().Name);
+        Assert.Equal(DeleteBehavior.Cascade, usuario.DeleteBehavior);
+        Assert.Equal("fk_refresh_tokens_usuarios_usuario_id", usuario.GetConstraintName());
+
+        var substituto = fks.Single(fk => fk.PrincipalEntityType.ClrType == typeof(RefreshToken));
+        Assert.Equal(nameof(RefreshToken.SubstituidoPorId), substituto.Properties.Single().Name);
+        Assert.Equal(DeleteBehavior.SetNull, substituto.DeleteBehavior);
     }
 
     private IEntityType Entidade(Type tipo) =>

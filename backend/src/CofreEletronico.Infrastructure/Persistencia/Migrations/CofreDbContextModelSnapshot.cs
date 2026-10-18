@@ -22,6 +22,65 @@ namespace CofreEletronico.Infrastructure.Persistencia.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("CofreEletronico.Domain.Autenticacao.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("criado_em");
+
+                    b.Property<DateTimeOffset>("ExpiraEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expira_em");
+
+                    b.Property<Guid>("FamiliaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("familia_id");
+
+                    b.Property<DateTimeOffset?>("RevogadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revogado_em");
+
+                    b.Property<DateTimeOffset>("SessaoExpiraEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sessao_expira_em");
+
+                    b.Property<Guid?>("SubstituidoPorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("substituido_por_id");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("usuario_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_refresh_tokens");
+
+                    b.HasIndex("FamiliaId")
+                        .HasDatabaseName("ix_refresh_tokens_familia_id");
+
+                    b.HasIndex("SubstituidoPorId")
+                        .HasDatabaseName("ix_refresh_tokens_substituido_por_id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_refresh_tokens_token_hash");
+
+                    b.HasIndex("UsuarioId")
+                        .HasDatabaseName("ix_refresh_tokens_usuario_id");
+
+                    b.ToTable("refresh_tokens", (string)null);
+                });
+
             modelBuilder.Entity("CofreEletronico.Infrastructure.Persistencia.Identity.Papel", b =>
                 {
                     b.Property<Guid>("Id")
@@ -308,6 +367,22 @@ namespace CofreEletronico.Infrastructure.Persistencia.Migrations
                         .HasName("pk_usuarios_tokens");
 
                     b.ToTable("usuarios_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("CofreEletronico.Domain.Autenticacao.RefreshToken", b =>
+                {
+                    b.HasOne("CofreEletronico.Domain.Autenticacao.RefreshToken", null)
+                        .WithMany()
+                        .HasForeignKey("SubstituidoPorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_refresh_tokens_refresh_tokens_substituido_por_id");
+
+                    b.HasOne("CofreEletronico.Infrastructure.Persistencia.Identity.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_refresh_tokens_usuarios_usuario_id");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

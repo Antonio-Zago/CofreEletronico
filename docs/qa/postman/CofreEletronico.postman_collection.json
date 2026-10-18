@@ -1,0 +1,547 @@
+{
+  "info": {
+    "name": "Cofre Eletrônico API",
+    "description": "Endpoints disponíveis até a T-0302: /ping e /auth (registro, login, refresh, logout).\n\nAntes de usar:\n1. Configure no backend os user-secrets `ConnectionStrings:Cofre` e `Jwt:ChaveAssinatura` (ver backend/README.md).\n2. Suba a Api com o perfil `http` (http://localhost:5146). Se usar outro perfil, ajuste a variável `baseUrl` da collection.\n\nOrdem: rode as pastas de cima para baixo (ou a collection inteira no Runner). Os scripts guardam os tokens automaticamente nas variáveis da collection.\n\nRate limit: registro + login somam 10 requisições/min por IP. As pastas 0 a 3 fazem 8 dessas chamadas; se rodar duas vezes no mesmo minuto você vai receber 429. Espere 1 minuto ou, só em dev, suba a Api com a variável de ambiente RateLimit__AuthCredenciais__Limite=1000.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5146" },
+    { "key": "email", "value": "" },
+    { "key": "senha", "value": "Senha1234" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "refreshTokenAntigo", "value": "" },
+    { "key": "refreshReuso1", "value": "" },
+    { "key": "refreshReuso2", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0 - Saúde",
+      "item": [
+        {
+          "name": "GET /ping",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 pong', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.eql('pong');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/ping"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 - Fluxo principal",
+      "item": [
+        {
+          "name": "POST /auth/registro (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// E-mail novo a cada execução para não colidir com cadastros anteriores.",
+                  "pm.collectionVariables.set('email', `teste.${Date.now()}@cofre.local`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 com tokens', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('accessToken');",
+                  "    pm.expect(body).to.have.property('accessTokenExpiraEm');",
+                  "    pm.expect(body).to.have.property('refreshToken');",
+                  "    pm.expect(body).to.have.property('refreshTokenExpiraEm');",
+                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Usuário de Teste\",\n  \"email\": \"{{email}}\",\n  \"senha\": \"{{senha}}\",\n  \"telefone\": \"11999990000\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/registro",
+            "description": "Cria o usuário com o papel Usuario e já devolve os tokens (login automático). Telefone é opcional; CPF não é pedido no cadastro."
+          }
+        },
+        {
+          "name": "POST /auth/login (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 com tokens', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "});",
+                  "",
+                  "pm.test('JWT com as claims do contrato', () => {",
+                  "    const token = pm.collectionVariables.get('accessToken');",
+                  "    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    pm.expect(payload).to.include.keys('sub', 'email', 'role', 'jti', 'iss', 'aud', 'exp');",
+                  "    pm.expect(payload.email).to.eql(pm.collectionVariables.get('email'));",
+                  "    console.log('Claims do access token:', payload);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"senha\": \"{{senha}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Abre o console do Postman (View > Show Postman Console) para ver as claims decodificadas do JWT."
+          }
+        },
+        {
+          "name": "POST /auth/refresh (200, rotação)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 com par novo', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const anterior = pm.collectionVariables.get('refreshToken');",
+                  "    pm.expect(body.refreshToken).to.not.eql(anterior);",
+                  "    pm.collectionVariables.set('refreshTokenAntigo', anterior);",
+                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/refresh",
+            "description": "Troca o refresh token por um par novo. O token usado é revogado (rotação)."
+          }
+        },
+        {
+          "name": "POST /auth/logout (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/logout",
+            "description": "Revoga o refresh token. O access token continua válido até expirar (15 min)."
+          }
+        },
+        {
+          "name": "POST /auth/refresh após logout (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401: token revogado pelo logout', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Erros esperados",
+      "item": [
+        {
+          "name": "Registro com e-mail já cadastrado (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 genérico, sem ecoar o e-mail', () => {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.text()).to.not.include(pm.collectionVariables.get('email'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Outro Usuário\",\n  \"email\": \"{{email}}\",\n  \"senha\": \"{{senha}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/registro"
+          }
+        },
+        {
+          "name": "Registro com senha fraca (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 com erros no campo senha', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    console.log('Erros de validação:', pm.response.json());",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Senha Fraca\",\n  \"email\": \"fraca.{{$timestamp}}@cofre.local\",\n  \"senha\": \"abc\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/registro",
+            "description": "A senha precisa ter 8+ caracteres, dígito, minúscula e maiúscula. Veja as mensagens (em português) no corpo da resposta."
+          }
+        },
+        {
+          "name": "Registro sem campos obrigatórios (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"email-invalido\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/registro"
+          }
+        },
+        {
+          "name": "Login com senha errada (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 genérico', () => pm.response.to.have.status(401));",
+                  "pm.collectionVariables.set('corpo401SenhaErrada', pm.response.text());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"senha\": \"SenhaErrada1\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Cada senha errada conta para o bloqueio: 5 falhas bloqueiam a conta por 15 minutos."
+          }
+        },
+        {
+          "name": "Login com e-mail inexistente (401 idêntico)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 genérico', () => pm.response.to.have.status(401));",
+                  "pm.test('mesmo corpo da senha errada (não revela se o e-mail existe)', () => {",
+                  "    const outro = pm.collectionVariables.get('corpo401SenhaErrada');",
+                  "    if (outro) { pm.expect(pm.response.text()).to.eql(outro); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nao.existe.{{$timestamp}}@cofre.local\",\n  \"senha\": \"{{senha}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Refresh com token inválido (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"token-que-nao-existe\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "Logout com token inexistente (204 idempotente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"token-que-nao-existe\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Reuso de refresh token (roubo)",
+      "description": "Simula um refresh token roubado: o token antigo, já rotacionado, é reapresentado. O servidor revoga a sessão inteira, então até o token mais novo deixa de funcionar.",
+      "item": [
+        {
+          "name": "1. Login (nova sessão)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('refreshReuso1', pm.response.json().refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"senha\": \"{{senha}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "2. Refresh legítimo (token 1 → token 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('refreshReuso2', pm.response.json().refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshReuso1}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "3. Reuso do token 1 (401, revoga a sessão)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401: reuso detectado', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshReuso1}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "4. Token 2 também foi revogado (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401: família inteira revogada', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshReuso2}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 - Manuais (não rodar no Runner)",
+      "description": "Testes que precisam de repetição ou afetam a conta. Rode isoladamente.",
+      "item": [
+        {
+          "name": "Rate limit: login repetido (429 na 11ª no mesmo minuto)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 429) {",
+                  "    pm.test('429 com Retry-After', () => pm.response.to.have.header('Retry-After'));",
+                  "    console.log('Retry-After (s):', pm.response.headers.get('Retry-After'));",
+                  "} else {",
+                  "    pm.test('ainda dentro do limite (401 esperado)', () => pm.response.to.have.status(401));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rate.limit@cofre.local\",\n  \"senha\": \"Qualquer1\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Clique em Send várias vezes (ou rode só esta requisição no Runner com 12 iterações). Registro e login somam 10/min por IP; a partir daí vem 429 com o cabeçalho Retry-After. Refresh/logout têm cota separada (60/min) e continuam funcionando."
+          }
+        },
+        {
+          "name": "Bloqueio: 5 senhas erradas bloqueiam a conta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"senha\": \"SenhaErrada1\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Envie 5 vezes (a pasta 2 já fez 1 tentativa errada). Depois rode 'POST /auth/login (200)' com a senha certa: a resposta será 401 por 15 minutos, porque a conta ficou bloqueada. Na tabela usuarios, confira access_failed_count e lockout_end. Atenção ao rate limit de 10/min."
+          }
+        }
+      ]
+    }
+  ]
+}

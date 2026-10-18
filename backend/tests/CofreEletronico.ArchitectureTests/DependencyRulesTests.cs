@@ -52,6 +52,14 @@ public class DependencyRulesTests
             "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore.Identity");
     }
 
+    [Fact]
+    public void Application_nao_depende_de_bibliotecas_de_JWT_nem_ASP_NET()
+    {
+        // Emissão/validação de JWT é detalhe da Infrastructure/Api; a Application só conhece IGeradorAccessToken.
+        AssertSemDependencia(ApplicationAssembly,
+            "Microsoft.IdentityModel", "System.IdentityModel.Tokens.Jwt", "Microsoft.AspNetCore");
+    }
+
     private static void AssertSemDependencia(Assembly assembly, params string[] proibidas)
     {
         var resultado = Types.InAssembly(assembly)
