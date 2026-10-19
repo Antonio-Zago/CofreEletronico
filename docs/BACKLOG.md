@@ -6,7 +6,7 @@ Detalhes técnicos (arquitetura, contrato MQTT, modelo de dados, fluxo) em [ARQU
 
 **Prioridade:** P1 = MVP obrigatório · P2 = importante · P3 = desejável. **Sprints** de 2 semanas. **Pts** = story points (1 = poucas horas, 3 = alguns dias).
 
-**Resumo:** 9 épicos · 22 user stories · 93 tarefas · 186 pontos.
+**Resumo:** 9 épicos · 22 user stories · 94 tarefas · 189 pontos.
 
 ## Roadmap
 
@@ -17,9 +17,9 @@ Detalhes técnicos (arquitetura, contrato MQTT, modelo de dados, fluxo) em [ARQU
 | 3 | Firmware MQTT (US-20), locação (US-07), telas de mapa e estante | 37 |
 | 4 | Pix e abertura (US-07/08), SignalR, telas de pagamento e locação ativa | 30 |
 | 5 | Encerrar/estender, notificações, admin/monitoramento, deploy | 34 |
-| 6 | Segurança, E2E com hardware, piloto | 20 |
+| 6 | Segurança (incl. rotação da chave dos segredos HMAC), E2E com hardware, piloto | 23 |
 
-**Pontos por componente:** Infra 14 · Backend 91 · Mobile 35 · Firmware 22 · Docs 5 · Hardware 7 · QA 12
+**Pontos por componente:** Infra 14 · Backend 94 · Mobile 35 · Firmware 22 · Docs 5 · Hardware 7 · QA 12
 
 ## Rastreabilidade com o Backlog1 original
 
@@ -107,7 +107,7 @@ Critérios de aceite:
 
 | Nº Tarefa | Tarefa | Componente | Prioridade | Sprint | Pts | Status |
 |---|---|---|---|---|---|---|
-| T-0401 | Entidades Estante, Cofre, Tarifa + migrations | Backend | P1 | 2 | 2 | A fazer |
+| T-0401 | Entidades Estante, Cofre, Tarifa + migrations | Backend | P1 | 2 | 2 | Concluído |
 | T-0402 | CRUD /admin/estantes (gera device_id, credenciais MQTT e segredo HMAC) | Backend | P1 | 2 | 3 | A fazer |
 | T-0403 | CRUD /admin/estantes/{id}/cofres (número, canal do relé, tamanho) | Backend | P1 | 2 | 2 | A fazer |
 | T-0404 | CRUD /admin/tarifas (valor por hora, tempo mínimo por tamanho) | Backend | P1 | 2 | 2 | A fazer |
@@ -393,6 +393,7 @@ Critérios de aceite:
 |---|---|---|---|---|---|---|
 | T-2101 | Revisão de segurança: TLS, ACLs, HMAC, rate limit e LGPD (dados pessoais, CPF) | QA | P1 | 6 | 3 | A fazer |
 | T-2102 | Testes de abuso: replay de comando, cofre alheio, webhook falso | QA | P1 | 6 | 2 | A fazer |
+| T-2103 | Rotação da chave de criptografia dos segredos HMAC (várias versões de chave, cifrar com a atual, decifrar pela versão do prefixo, comando de recifragem) | Backend | P2 | 6 | 3 | A fazer |
 
 ### US-22 · P1
 

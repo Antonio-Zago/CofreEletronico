@@ -52,14 +52,31 @@ QoS 1. Conexão TLS. Cada ESP32 tem usuário/senha próprios e a ACL só permite
 
 | Tópico | Direção | Payload |
 |---|---|---|
-| `cofre/{estanteId}/cmd` | Backend → ESP32 | `{ "commandId": "uuid", "cofre": 3, "acao": "abrir", "ts": 1760000000, "assinatura": "hmac-sha256" }` |
-| `cofre/{estanteId}/ack` | ESP32 → Backend | `{ "commandId": "uuid", "cofre": 3, "resultado": "ok" \| "erro", "erro": "..." }` |
+| `cofre/{estanteId}/cmd` | Backend → ESP32 (nunca retained) | `{ "commandId": "uuid", "cofre": 3, "canal": 5, "acao": "abrir", "ts": 1760000000, "assinatura": "hmac-sha256" }` |
+| `cofre/{estanteId}/ack` | ESP32 → Backend | `{ "commandId": "uuid", "cofre": 3, "canal": 5, "resultado": "ok" \| "erro", "erro": "..." }` |
 | `cofre/{estanteId}/estado` | ESP32 → Backend (retained) | `{ "cofres": [ { "n": 3, "porta": "fechada" } ] }` |
 | `cofre/{estanteId}/online` | ESP32 → Backend (LWT + heartbeat, retained) | `"online"` / `"offline"` |
 
+Identificação da estante:
+- `{estanteId}` nos tópicos é o `device_id` da estante (ex.: `cofre/est-7k2m9q/cmd`), e não o id interno (Guid).
+- O `device_id` também é o username MQTT do ESP32. A ACL do Mosquitto usa `%u` para restringir cada ESP32 aos próprios tópicos.
+- O username `backend` é reservado para a API.
+
+Campos do comando:
+- `cofre`: número do cofre na estante, usado em log e no `ack`.
+- `canal`: canal do relé a acionar, de 0 a 15.
+- O backend é a fonte única do mapeamento número→canal (tabela `cofres`, coluna `canal_rele`). O ESP32 aciona o canal recebido e não mantém tabela própria.
+- O `ack` ecoa `cofre` e `canal` para o backend conferir que o canal acionado é o esperado e para facilitar o diagnóstico de mapeamento errado.
+
 Regras de segurança dos comandos:
-- `assinatura` = HMAC-SHA256 de `commandId|cofre|acao|ts` com o segredo da estante (gerado no cadastro).
-- O ESP32 rejeita comando com assinatura inválida, `ts` fora da janela (ex.: 30 s) ou `commandId` já processado.
+- `assinatura` = HMAC-SHA256 de `deviceId|commandId|cofre|canal|acao|ts` com o segredo da estante (gerado no cadastro). `deviceId` é o `device_id` da estante de destino e não vai no payload: incluí-lo faz a assinatura valer só para aquela estante.
+- O backend nunca publica `cmd` com a flag retain.
+- O ESP32 rejeita (sem acionar relé):
+  - assinatura inválida, incluindo a calculada com outro `deviceId` (o ESP32 assina com o seu próprio `device_id`, então comando destinado a outra estante falha na verificação);
+  - `canal` fora de 0 a 15;
+  - `ts` fora da janela (ex.: 30 s);
+  - `commandId` já processado;
+  - `cmd` recebido com a flag retain (descartado).
 - O backend espera o `ack` por até 10 s. Sem resposta, devolve timeout ao app e registra o evento.
 
 ## Contrato REST: autenticação
@@ -98,9 +115,9 @@ Regras:
 | `usuarios` | id, nome, email (único), senha_hash, cpf (opcional, único quando informado), telefone, criado_em | Usuário do ASP.NET Identity, existe só na Infrastructure; o domínio referencia apenas `usuario_id`. Inclui os campos técnicos do Identity (security_stamp, lockout etc.). CPF pedido só quando necessário (ex.: Pix), por LGPD |
 | `usuarios_papeis` | usuario_id, papel_id | Tabela intermediária do Identity (PK composta). Cadastro recebe `Usuario`; um admin pode ter os dois papéis |
 | `refresh_tokens` | id, usuario_id, token_hash (único), familia_id, criado_em, expira_em, sessao_expira_em, revogado_em, substituido_por_id | Refresh tokens rotativos. Guarda só o hash SHA-256. `familia_id` agrupa as rotações de um mesmo login, para revogação em cadeia em caso de reuso. `sessao_expira_em`: limite absoluto da sessão (login + 90 dias), copiado em cada rotação. `substituido_por_id` aponta para o token gerado na rotação |
-| `estantes` | id, nome, endereco, latitude, longitude, device_id, segredo_hmac, online, ultimo_heartbeat | Renomeia `estante_cofres` |
-| `cofres` | id, estante_id, numero, canal_rele, tamanho, status | status: livre / reservado / ocupado / manutencao |
-| `tarifas` | id, tamanho, valor_por_hora, tempo_minimo | |
+| `estantes` | id, nome, endereco, latitude, longitude, device_id (único), segredo_hmac (cifrado), online, ultimo_heartbeat, ativa, criado_em | Renomeia `estante_cofres`. `device_id`: curto, gerado no cadastro, formato `est-` + 6 caracteres `[a-z0-9]` (ex.: `est-7k2m9q`); é o identificador da estante nos tópicos MQTT e o username do ESP32 no Mosquitto. `segredo_hmac`: guardado cifrado (AES-GCM, chave da aplicação fora do banco), porque o backend precisa do valor original para assinar os comandos. latitude e longitude: double precision com CHECK de faixa (-90..90 e -180..180). `ativa = false` é a exclusão lógica (a estante sai das buscas, mas o histórico é preservado) |
+| `cofres` | id, estante_id, numero, canal_rele, tamanho, status, ativo | tamanho: pequeno / medio / grande. status: livre / reservado / ocupado / manutencao. `numero` é único dentro da estante. `canal_rele`: de 0 a 15 (placa de 16 relés por estante), único dentro da estante. `ativo = false` é a exclusão lógica |
+| `tarifas` | id, tamanho (único), valor_por_hora, tempo_minimo | Uma tarifa por tamanho, válida para todas as estantes. valor_por_hora: numeric(10,2), em BRL. tempo_minimo: em minutos. A locação guarda o valor cobrado, então mudar a tarifa não afeta locações existentes |
 | `locacoes` | id, usuario_id, cofre_id, inicio, fim_previsto, fim_real, status, valor | Substitui `usuarios_cofres`. status: aguardando_pagamento / ativa / encerrada / cancelada / expirada |
 | `pagamentos` | id, locacao_id, mp_payment_id, qr_code, status, valor, pago_em | Uma locação pode ter vários (extensões) |
 | `eventos_cofre` | id, cofre_id, usuario_id, command_id, acao, resultado, criado_em, respondido_em | Auditoria de todos os comandos |
@@ -121,5 +138,5 @@ Jobs em background: cancelar reservas com Pix não pago, expirar locações venc
 ## Pontos em aberto
 
 - Política para itens não retirados após o fim da locação (cobrança de tempo extra? bloqueio?).
-- Tamanhos de cofre e tabela de preços.
+- Valores das tarifas (definidos pelo admin via T-0404).
 - Hospedagem de produção (VPS ou nuvem).

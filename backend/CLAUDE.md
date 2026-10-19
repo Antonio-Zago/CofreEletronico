@@ -17,7 +17,7 @@ Clean Architecture, .NET 8 (SDK fixado em `global.json`). Visão geral e comando
 - Pacotes: adicione a versão em `Directory.Packages.props` e a referência sem `Version` no `.csproj`.
 - Warnings são erros (`Directory.Build.props`).
 - Testes: `Domain.Tests` e `Application.Tests` para unidade (portas com fakes); `Api.Tests` para HTTP; `ArchitectureTests` para a regra de dependência — atualize se surgir uma nova camada/proibição. Integração (Testcontainers) entra a partir da T-0307.
-- Segredos nunca em `appsettings*.json`: use `dotnet user-secrets` ou variáveis de ambiente. Hoje: `ConnectionStrings:Cofre` e `Jwt:ChaveAssinatura` (ver README).
+- Segredos nunca em `appsettings*.json`: use `dotnet user-secrets` ou variáveis de ambiente. Hoje: `ConnectionStrings:Cofre`, `Jwt:ChaveAssinatura` e `Criptografia:ChaveSegredos` (ver README). Testes usam chaves fictícias em `InfrastructureFixture` e `ApiFactory`: ao criar opção obrigatória nova, adicione o valor de teste nos dois.
 - Persistência: `Infrastructure/Persistencia/CofreDbContext` (Identity com chave `Guid`; `Usuario`/`Papel` em `Persistencia/Identity/`). Mapeamentos em classes `IEntityTypeConfiguration<T>` na Infrastructure, aplicadas por `ApplyConfigurationsFromAssembly`. String de conexão `ConnectionStrings:Cofre` (user-secrets ou `ConnectionStrings__Cofre`).
 - `dotnet ef`: ferramenta local (`.config/dotnet-tools.json`, mesma versão do EF Core). Rode `dotnet tool restore` e use a Api como startup project:
   `dotnet ef <comando> --project src/CofreEletronico.Infrastructure --startup-project src/CofreEletronico.Api`.
@@ -30,6 +30,15 @@ Clean Architecture, .NET 8 (SDK fixado em `global.json`). Visão geral e comando
 - Nunca use `Include Error Detail` na string de conexão nem `EnableSensitiveDataLogging()` fora da máquina local: o detalhe de uma violação de índice único expõe CPF/e-mail em log.
 - Violação de unicidade do PostgreSQL (SQLSTATE `23505`) vira **409 genérico**, sem ecoar o valor conflitante.
 - Datas/horas: `DateTimeOffset` em UTC (mapeia para `timestamptz`).
+- Nomes explícitos para PK (`pk_<tabela>`), índices (`ix_<tabela>_<colunas>`), FKs (`fk_<tabela>_<principal>_<coluna>`) e CHECKs (`ck_<tabela>_<coluna>`), em todas as tabelas.
+- Enums do domínio vão para o banco como texto em minúsculas e sem acento (`EnumTexto.Conversor<T>()`), `varchar(20)`, com CHECK gerada do próprio enum (`EnumTexto.CheckValores<T>`). Nomes dos membros dos enums nunca levam acento.
+- Regras de negócio que o banco também consegue garantir (faixas, positividade, unicidade, formato do `device_id`) ficam duplicadas como CHECK/índice único, além da validação no domínio.
+- Domínio: violação de regra lança `ExcecaoDominio` (`Domain/Common`); transição de estado inválida do cofre lança `TransicaoCofreInvalidaException`. Mensagens seguras para o cliente (sem segredos). Exclusão de `Estante`/`Cofre` é lógica (`Ativa`/`Ativo`); FKs para elas são `RESTRICT`.
+- Máquina de estados do `Cofre` documentada na própria classe: Reservado/Ocupado não vão para Manutencao nem podem ser desativados.
+- Segredos que o backend precisa ler em claro (segredo HMAC da estante) são cifrados com `ICifradorSegredos` (AES-256-GCM, `Infrastructure/Criptografia`, formato `v1:` + base64(nonce|cifrado|tag)) via `ValueConverter`. O cifrador é singleton, lê a chave só no primeiro uso (o `dotnet ef` funciona sem ela) e é injetado no `CofreDbContext`; por isso o cache de modelo é chaveado também pela instância do cifrador (`CofreModelCacheKeyFactory`). Configurações que dependem de serviço são aplicadas em `OnModelCreating` (ver `EstanteConfiguracao.ConfigurarSegredoHmac`); as demais continuam com construtor sem parâmetros. Nunca filtre consultas por coluna cifrada (o nonce é aleatório). O cifrador **tem de ser singleton** (scoped/transient vazaria um modelo por contexto; há teste). Fora do ambiente `Testing`, chaves conhecidas/triviais (a de teste versionada, bytes todos iguais) são recusadas na subida; por isso `InfrastructureFixture` registra um `IHostEnvironment` `Testing` e a `ApiFactory` sobe como `Testing`.
+- Segredo em entidade nunca é propriedade pública (serializadores e logs estruturados a leriam): fica em propriedade privada mapeada pelo EF e sai só por método que devolve cópia (ex.: `Estante.ObterSegredoHmac()`).
+- **Nunca devolva entidade de domínio em endpoint**: sempre DTO. O segredo HMAC só sai da Api uma vez, no cadastro ou na regeneração (T-0402).
+- Concorrência: `cofres` ainda não tem token de concorrência; a reserva (T-0702) define o controle (UPDATE condicional e/ou `xmin`).
 - A Application não referencia EF Core, ASP.NET Identity, ASP.NET Core nem bibliotecas de JWT (regras em `ArchitectureTests`). `Infrastructure.Tests` verifica o modelo EF sem banco (`IDesignTimeModel`).
 
 ### Casos de uso e portas

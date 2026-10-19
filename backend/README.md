@@ -17,7 +17,7 @@ src/
 tests/
   CofreEletronico.Domain.Tests
   CofreEletronico.Application.Tests
-  CofreEletronico.Infrastructure.Tests  # modelo EF (sem banco), DI do Identity, JWT e refresh token
+  CofreEletronico.Infrastructure.Tests  # modelo EF (sem banco), DI do Identity, JWT, refresh token e cifrador
   CofreEletronico.Api.Tests          # endpoints via WebApplicationFactory (portas de banco trocadas por fakes)
   CofreEletronico.ArchitectureTests  # garante a regra de dependência (NetArchTest)
 tools/EspSimulator                   # (futuro, T-0607) simulador de ESP32
@@ -54,7 +54,7 @@ dotnet run --project src/CofreEletronico.Api
 
 Em Development o Swagger fica em `/swagger`. Endpoint de teste: `GET /ping`.
 
-A Api **não sobe** sem `Jwt:ChaveAssinatura` (ver a seção abaixo).
+A Api **não sobe** sem `Jwt:ChaveAssinatura` e sem `Criptografia:ChaveSegredos` (ver as seções abaixo).
 
 ## Autenticação (JWT)
 
@@ -92,6 +92,35 @@ Use uma chave diferente por ambiente. Trocar a chave invalida todos os access to
 Rate limit por IP (IPv6 agrupado por prefixo /64), em duas políticas com contadores independentes: `/auth/registro` + `/auth/login` com 10 requisições/min somadas (`RateLimit:AuthCredenciais`) e `/auth/refresh` + `/auth/logout` com 60/min somadas (`RateLimit:AuthSessao`). Cada subseção tem `Limite` e `JanelaSegundos`. Ao exceder: 429 com `Retry-After`. Atrás de proxy reverso o limite só funciona por cliente depois de configurar ForwardedHeaders (T-1203).
 
 Validades (padrões do contrato, com teto validado na subida): access token de 15 min (`Jwt:ValidadeAccessToken`, 1 a 15 min), refresh token de 30 dias (`Jwt:ValidadeRefreshToken`, 1 a 30 dias) e sessão de 90 dias desde o login (`Jwt:ValidadeSessao`, 1 a 90 dias). Cada refresh token expira em `min(agora + 30 dias, sessao_expira_em)`.
+
+## Chave de criptografia dos segredos das estantes
+
+O segredo HMAC de cada estante (usado para assinar os comandos MQTT) é gravado no banco cifrado com AES-256-GCM (coluna `estantes.segredo_hmac`, formato `v1:` + base64 de nonce | texto cifrado | tag). A chave `Criptografia:ChaveSegredos` fica **fora do banco** e é segredo: **nunca** vai para `appsettings*.json` nem para o git. Deve ter **exatamente 32 bytes**, em base64 (44 caracteres). Sem ela, ou com base64 inválido ou tamanho errado, a Api falha na subida com uma mensagem dizendo o que configurar. Fora do ambiente `Testing`, chaves conhecidas ou triviais também são recusadas (a chave fictícia dos testes, bytes 0..31, e qualquer chave com todos os bytes iguais, como a toda zero). O `dotnet ef` (migrations) não precisa dela.
+
+Gerar a chave (32 bytes aleatórios em base64):
+
+```powershell
+# PowerShell (Windows PowerShell 5.1 ou PowerShell 7)
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
+```
+
+```bash
+openssl rand -base64 32
+```
+
+Desenvolvimento local (user-secrets), dentro de `backend/`:
+
+```bash
+dotnet user-secrets set "Criptografia:ChaveSegredos" "<chave gerada>" --project src/CofreEletronico.Api
+```
+
+Servidor, contêiner ou CI (variável de ambiente):
+
+```bash
+export Criptografia__ChaveSegredos="<chave gerada>"
+```
+
+> **Atenção: guarde a chave em local seguro (cofre de senhas/segredos) e faça backup.** Perder a chave torna os segredos gravados **irrecuperáveis**: seria preciso gerar um novo segredo para cada estante, regravá-lo no banco e reprovisioná-lo no ESP32 correspondente. Trocar a chave tem o mesmo efeito (a rotação com recifragem ainda não existe; o prefixo `v1:` está aí para permitir isso no futuro). Use uma chave diferente por ambiente.
 
 ## Banco de dados (PostgreSQL)
 

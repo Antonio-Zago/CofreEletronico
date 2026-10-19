@@ -20,6 +20,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Chave usada só nos testes (mais de 64 bytes, o bastante também para HS512). Não é segredo.</summary>
     public const string ChaveJwt = "chave-de-teste-da-api-com-mais-de-64-bytes-para-servir-ao-teste-de-hs512";
 
+    /// <summary>Chave AES fictícia (bytes 0..31 em base64), só para os testes. Não é segredo.</summary>
+    public const string ChaveSegredos = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+
     public const string RotaProtegida = "/teste/protegido";
 
     /// <summary>Altos por padrão para não interferir; os testes de 429 criam uma fábrica com limites baixos.</summary>
@@ -36,6 +39,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         // Fora de Development: sem user-secrets, sem migrations e sem Swagger.
         builder.UseEnvironment("Testing");
         builder.UseSetting("Jwt:ChaveAssinatura", ChaveJwt);
+        builder.UseSetting("Criptografia:ChaveSegredos", ChaveSegredos);
         builder.UseSetting("RateLimit:AuthCredenciais:Limite", LimiteCredenciais.ToString(CultureInfo.InvariantCulture));
         builder.UseSetting("RateLimit:AuthSessao:Limite", LimiteSessao.ToString(CultureInfo.InvariantCulture));
 

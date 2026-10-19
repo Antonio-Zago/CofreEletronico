@@ -81,6 +81,171 @@ namespace CofreEletronico.Infrastructure.Persistencia.Migrations
                     b.ToTable("refresh_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("CofreEletronico.Domain.Estantes.Cofre", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Ativo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("ativo");
+
+                    b.Property<int>("CanalRele")
+                        .HasColumnType("integer")
+                        .HasColumnName("canal_rele");
+
+                    b.Property<Guid>("EstanteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estante_id");
+
+                    b.Property<int>("Numero")
+                        .HasColumnType("integer")
+                        .HasColumnName("numero");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Tamanho")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tamanho");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cofres");
+
+                    b.HasIndex("EstanteId", "CanalRele")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cofres_estante_id_canal_rele");
+
+                    b.HasIndex("EstanteId", "Numero")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cofres_estante_id_numero");
+
+                    b.ToTable("cofres", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_cofres_canal_rele", "canal_rele >= 0 AND canal_rele <= 15");
+
+                            t.HasCheckConstraint("ck_cofres_numero", "numero > 0");
+
+                            t.HasCheckConstraint("ck_cofres_status", "status IN ('livre', 'reservado', 'ocupado', 'manutencao')");
+
+                            t.HasCheckConstraint("ck_cofres_tamanho", "tamanho IN ('pequeno', 'medio', 'grande')");
+                        });
+                });
+
+            modelBuilder.Entity("CofreEletronico.Domain.Estantes.Estante", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Ativa")
+                        .HasColumnType("boolean")
+                        .HasColumnName("ativa");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("criado_em");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("device_id");
+
+                    b.Property<string>("Endereco")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("endereco");
+
+                    b.Property<double>("Latitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latitude");
+
+                    b.Property<double>("Longitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longitude");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("nome");
+
+                    b.Property<bool>("Online")
+                        .HasColumnType("boolean")
+                        .HasColumnName("online");
+
+                    b.Property<string>("SegredoHmac")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("segredo_hmac");
+
+                    b.Property<DateTimeOffset?>("UltimoHeartbeat")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ultimo_heartbeat");
+
+                    b.HasKey("Id")
+                        .HasName("pk_estantes");
+
+                    b.HasIndex("DeviceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_estantes_device_id");
+
+                    b.ToTable("estantes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_estantes_device_id", "device_id ~ '^est-[a-z0-9]{6}$'");
+
+                            t.HasCheckConstraint("ck_estantes_latitude", "latitude >= -90 AND latitude <= 90");
+
+                            t.HasCheckConstraint("ck_estantes_longitude", "longitude >= -180 AND longitude <= 180");
+                        });
+                });
+
+            modelBuilder.Entity("CofreEletronico.Domain.Tarifas.Tarifa", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Tamanho")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tamanho");
+
+                    b.Property<int>("TempoMinimo")
+                        .HasColumnType("integer")
+                        .HasColumnName("tempo_minimo");
+
+                    b.Property<decimal>("ValorPorHora")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("valor_por_hora");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tarifas");
+
+                    b.HasIndex("Tamanho")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tarifas_tamanho");
+
+                    b.ToTable("tarifas", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_tarifas_tamanho", "tamanho IN ('pequeno', 'medio', 'grande')");
+
+                            t.HasCheckConstraint("ck_tarifas_tempo_minimo", "tempo_minimo > 0");
+
+                            t.HasCheckConstraint("ck_tarifas_valor_por_hora", "valor_por_hora > 0");
+                        });
+                });
+
             modelBuilder.Entity("CofreEletronico.Infrastructure.Persistencia.Identity.Papel", b =>
                 {
                     b.Property<Guid>("Id")
@@ -383,6 +548,16 @@ namespace CofreEletronico.Infrastructure.Persistencia.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_refresh_tokens_usuarios_usuario_id");
+                });
+
+            modelBuilder.Entity("CofreEletronico.Domain.Estantes.Cofre", b =>
+                {
+                    b.HasOne("CofreEletronico.Domain.Estantes.Estante", null)
+                        .WithMany()
+                        .HasForeignKey("EstanteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cofres_estantes_estante_id");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
