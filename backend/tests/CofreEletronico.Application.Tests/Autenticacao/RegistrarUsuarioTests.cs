@@ -20,11 +20,11 @@ public class RegistrarUsuarioTests
         Assert.Equal(AutenticacaoCenario.Inicio.AddDays(30), tokens.RefreshTokenExpiraEm);
 
         // Dados normalizados e papel do cadastro.
-        var (dados, papel) = Assert.Single(_cenario.Identidade.Criados);
+        var (dados, papeis) = Assert.Single(_cenario.Identidade.Criados);
         Assert.Equal("Ana Souza", dados.Nome);
         Assert.Equal("ana@exemplo.com", dados.Email);
         Assert.Null(dados.Telefone);
-        Assert.Equal(Papeis.Usuario, papel);
+        Assert.Equal([Papeis.Usuario], papeis);
 
         // Refresh persistido só como hash, numa família nova.
         var refresh = Assert.Single(_cenario.Repositorio.Tokens);

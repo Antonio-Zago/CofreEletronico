@@ -23,7 +23,7 @@ public sealed class RegistrarUsuario
         var telefone = string.IsNullOrWhiteSpace(comando.Telefone) ? null : comando.Telefone.Trim();
         var dados = new NovoUsuario(comando.Nome.Trim(), comando.Email.Trim(), comando.Senha, telefone);
 
-        var criacao = await _identidade.CriarAsync(dados, Papeis.Usuario, cancellationToken);
+        var criacao = await _identidade.CriarUsuarioAsync(dados, cancellationToken);
 
         return criacao.Status switch
         {

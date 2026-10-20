@@ -13,27 +13,6 @@ public class EndpointProtegidoTests(ApiFactory factory) : IClassFixture<ApiFacto
 {
     private readonly HttpClient _cliente = factory.CreateClient();
 
-    private static string CriarToken(
-        string chave = ApiFactory.ChaveJwt,
-        string emissor = "cofre-eletronico-api",
-        string audiencia = "cofre-eletronico-app",
-        string algoritmo = SecurityAlgorithms.HmacSha256,
-        DateTime? expira = null)
-    {
-        var agora = DateTime.UtcNow;
-        var fim = expira ?? agora.AddMinutes(15);
-        return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
-        {
-            Issuer = emissor,
-            Audience = audiencia,
-            Subject = new ClaimsIdentity([new Claim("sub", Guid.NewGuid().ToString()), new Claim("role", "Usuario")]),
-            IssuedAt = fim.AddMinutes(-15),
-            NotBefore = fim.AddMinutes(-15),
-            Expires = fim,
-            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(chave)), algoritmo),
-        });
-    }
-
     private async Task<HttpStatusCode> GetProtegido(string? token)
     {
         using var requisicao = new HttpRequestMessage(HttpMethod.Get, ApiFactory.RotaProtegida);
@@ -57,26 +36,26 @@ public class EndpointProtegidoTests(ApiFactory factory) : IClassFixture<ApiFacto
     [Fact]
     public async Task Token_valido_devolve_200()
     {
-        Assert.Equal(HttpStatusCode.OK, await GetProtegido(CriarToken()));
+        Assert.Equal(HttpStatusCode.OK, await GetProtegido(TokensDeTeste.Criar()));
     }
 
     [Fact]
     public async Task Token_assinado_com_outra_chave_devolve_401()
     {
-        Assert.Equal(HttpStatusCode.Unauthorized, await GetProtegido(CriarToken(chave: "outra-chave-qualquer-com-mais-de-32-bytes")));
+        Assert.Equal(HttpStatusCode.Unauthorized, await GetProtegido(TokensDeTeste.Criar(chave: "outra-chave-qualquer-com-mais-de-32-bytes")));
     }
 
     [Fact]
     public async Task Token_de_outro_emissor_ou_audiencia_devolve_401()
     {
-        Assert.Equal(HttpStatusCode.Unauthorized, await GetProtegido(CriarToken(emissor: "outro")));
-        Assert.Equal(HttpStatusCode.Unauthorized, await GetProtegido(CriarToken(audiencia: "outra")));
+        Assert.Equal(HttpStatusCode.Unauthorized, await GetProtegido(TokensDeTeste.Criar(emissor: "outro")));
+        Assert.Equal(HttpStatusCode.Unauthorized, await GetProtegido(TokensDeTeste.Criar(audiencia: "outra")));
     }
 
     [Fact]
     public async Task Token_expirado_alem_da_tolerancia_devolve_401()
     {
-        Assert.Equal(HttpStatusCode.Unauthorized, await GetProtegido(CriarToken(expira: DateTime.UtcNow.AddMinutes(-1))));
+        Assert.Equal(HttpStatusCode.Unauthorized, await GetProtegido(TokensDeTeste.Criar(expira: DateTime.UtcNow.AddMinutes(-1))));
     }
 
     [Fact]
@@ -85,7 +64,7 @@ public class EndpointProtegidoTests(ApiFactory factory) : IClassFixture<ApiFacto
         // EXATAMENTE a mesma chave da Api, mas HS512: a assinatura confere, então o 401 só pode vir
         // da restrição ValidAlgorithms = [HS256].
         Assert.Equal(HttpStatusCode.Unauthorized,
-            await GetProtegido(CriarToken(chave: ApiFactory.ChaveJwt, algoritmo: SecurityAlgorithms.HmacSha512)));
+            await GetProtegido(TokensDeTeste.Criar(chave: ApiFactory.ChaveJwt, algoritmo: SecurityAlgorithms.HmacSha512)));
     }
 
     [Fact]
@@ -108,8 +87,7 @@ public class EndpointProtegidoTests(ApiFactory factory) : IClassFixture<ApiFacto
     [Fact]
     public async Task Token_sem_assinatura_devolve_401()
     {
-        var partes = CriarToken().Split('.');
-        var semAssinatura = $"{Base64UrlEncoder.Encode("{\"alg\":\"none\",\"typ\":\"JWT\"}")}.{partes[1]}.";
+        var semAssinatura = TokensDeTeste.SemAssinatura();
 
         Assert.Equal(HttpStatusCode.Unauthorized, await GetProtegido(semAssinatura));
     }

@@ -1,7 +1,10 @@
 using System.Globalization;
 using System.Threading.RateLimiting;
+using CofreEletronico.Api.Autorizacao;
+using CofreEletronico.Application.Autorizacao;
 using CofreEletronico.Infrastructure.Autenticacao;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
@@ -53,13 +56,46 @@ public static class AutenticacaoExtensions
                 // Mantém "sub", "email" e "role" como vieram no token (sem os tipos longos do .NET).
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = jwt.Value.CriarParametrosValidacao();
+                options.Events = new JwtBearerEvents
+                {
+                    OnChallenge = EscreverNaoAutorizadoAsync,
+                    OnForbidden = EscreverAcessoNegadoAsync,
+                };
             });
 
-        // Políticas por papel (403) entram na T-0303.
-        services.AddAuthorization();
+        services.AddAuthorizationBuilder()
+            // Todo endpoint sem metadado de autorização exige login. Rotas públicas: AllowAnonymous() explícito.
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
+            .AddPolicy(Politicas.Admin, politica => politica.RequireAuthenticatedUser().RequireRole(Papeis.Admin));
 
         return services;
     }
+
+    /// <summary>
+    /// 401 (sem token ou token inválido) como ProblemDetails, no mesmo formato dos 401 de /auth.
+    /// O motivo da recusa não vai para o corpo nem para o WWW-Authenticate (só <c>invalid_token</c>).
+    /// </summary>
+    private static Task EscreverNaoAutorizadoAsync(JwtBearerChallengeContext contexto)
+    {
+        contexto.HandleResponse(); // substitui a resposta padrão (corpo vazio)
+        contexto.Response.Headers.WWWAuthenticate = contexto.AuthenticateFailure is null
+            ? JwtBearerDefaults.AuthenticationScheme
+            : $"{JwtBearerDefaults.AuthenticationScheme} error=\"invalid_token\"";
+
+        return Results.Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Não autorizado",
+                detail: "Autenticação necessária. Envie um access token válido no cabeçalho Authorization (Bearer).")
+            .ExecuteAsync(contexto.HttpContext);
+    }
+
+    /// <summary>403 (autenticado, mas sem o papel exigido) como ProblemDetails.</summary>
+    private static Task EscreverAcessoNegadoAsync(ForbiddenContext contexto) =>
+        Results.Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Acesso negado",
+                detail: "Você não tem permissão para acessar este recurso.")
+            .ExecuteAsync(contexto.HttpContext);
 
     /// <summary>
     /// Rate limiter nativo com duas políticas de janela fixa, particionadas por IP (IPv6 por /64, ver

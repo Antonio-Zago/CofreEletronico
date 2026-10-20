@@ -5,11 +5,23 @@ namespace CofreEletronico.Application.Autenticacao.Portas;
 /// </summary>
 public interface IServicoIdentidade
 {
+    // Um método por intenção, com os papéis fixados pela implementação: a porta não aceita lista de papéis,
+    // então nenhum dado de entrada externa (corpo de requisição, configuração) consegue escolher papel.
+    //
+    // Nos dois métodos o usuário e os papéis são gravados na mesma transação. E-mail já existente (inclusive
+    // por corrida, via índice único) resulta em StatusCriacaoUsuario.EmailEmUso. Nunca alteram usuário existente.
+
+    /// <summary>Cadastro comum: cria o usuário com o papel <c>Usuario</c>, de forma atômica.</summary>
+    Task<ResultadoCriacaoUsuario> CriarUsuarioAsync(NovoUsuario dados, CancellationToken cancellationToken);
+
     /// <summary>
-    /// Cria o usuário e atribui o papel, de forma atômica. E-mail já existente (inclusive por corrida,
-    /// via índice único) resulta em <see cref="StatusCriacaoUsuario.EmailEmUso"/>.
+    /// Só para o administrador inicial (seed na subida): cria o usuário com os papéis <c>Admin</c> e
+    /// <c>Usuario</c>, de forma atômica.
     /// </summary>
-    Task<ResultadoCriacaoUsuario> CriarAsync(NovoUsuario dados, string papel, CancellationToken cancellationToken);
+    Task<ResultadoCriacaoUsuario> CriarAdministradorAsync(NovoUsuario dados, CancellationToken cancellationToken);
+
+    /// <summary>Indica se existe ao menos um usuário com o papel informado.</summary>
+    Task<bool> ExisteUsuarioComPapelAsync(string papel, CancellationToken cancellationToken);
 
     /// <summary>
     /// Verifica e-mail e senha aplicando o bloqueio por tentativas. Devolve <c>null</c> para e-mail

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
+using CofreEletronico.Api.Autorizacao;
 using CofreEletronico.Application.Autenticacao.Portas;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -24,6 +25,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public const string ChaveSegredos = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
 
     public const string RotaProtegida = "/teste/protegido";
+
+    public const string RotaAdmin = "/teste/admin";
+
+    public const string RotaSemMetadado = "/teste/sem-metadado";
 
     /// <summary>Altos por padrão para não interferir; os testes de 429 criam uma fábrica com limites baixos.</summary>
     public int LimiteCredenciais { get; init; } = 10_000;
@@ -55,28 +60,33 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Endpoint protegido que só existe nos testes, num ramo com o mesmo pipeline de autenticação e
-    /// autorização da Api. Devolve o "sub" e os papéis lidos do token.
+    /// Endpoints que só existem nos testes, em ramos com o mesmo pipeline de autenticação e autorização da Api:
+    /// <see cref="RotaProtegida"/> (RequireAuthorization), <see cref="RotaAdmin"/> (política Admin) e
+    /// <see cref="RotaSemMetadado"/> (nenhum metadado: cai na FallbackPolicy). Devolvem o "sub" e os papéis do token.
     /// </summary>
     private sealed class EndpointProtegidoFiltro : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
         {
-            app.Map(RotaProtegida, ramo =>
+            Ramo(app, RotaProtegida, endpoint => endpoint.RequireAuthorization());
+            Ramo(app, RotaAdmin, endpoint => endpoint.RequireAuthorization(Politicas.Admin));
+            Ramo(app, RotaSemMetadado, _ => { });
+
+            next(app);
+        };
+
+        private static void Ramo(IApplicationBuilder app, string rota, Action<RouteHandlerBuilder> configurar) =>
+            app.Map(rota, ramo =>
             {
                 ramo.UseRouting();
                 ramo.UseAuthentication();
                 ramo.UseAuthorization();
-                ramo.UseEndpoints(endpoints => endpoints
+                ramo.UseEndpoints(endpoints => configurar(endpoints
                     .MapGet("/", (ClaimsPrincipal usuario) => Results.Ok(new
                     {
                         sub = usuario.Identity!.Name,
                         papeis = usuario.FindAll("role").Select(c => c.Value).ToArray(),
-                    }))
-                    .RequireAuthorization());
+                    }))));
             });
-
-            next(app);
-        };
     }
 }

@@ -1,4 +1,5 @@
 using CofreEletronico.Application.Autenticacao;
+using CofreEletronico.Application.Autorizacao;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CofreEletronico.Application;
@@ -17,6 +18,9 @@ public static class DependencyInjection
         services.AddScoped<AutenticarUsuario>();
         services.AddScoped<RenovarTokens>();
         services.AddScoped<EncerrarSessao>();
+
+        // Autorização (T-0303)
+        services.AddScoped<GarantirAdminInicial>();
 
         return services;
     }

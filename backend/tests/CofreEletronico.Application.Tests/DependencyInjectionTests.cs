@@ -1,5 +1,6 @@
 using CofreEletronico.Application.Autenticacao;
 using CofreEletronico.Application.Autenticacao.Portas;
+using CofreEletronico.Application.Autorizacao;
 using CofreEletronico.Application.Tests.Autenticacao;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -28,5 +29,6 @@ public class DependencyInjectionTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<AutenticarUsuario>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RenovarTokens>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<EncerrarSessao>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<GarantirAdminInicial>());
     }
 }

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using CofreEletronico.Application.Autenticacao.Portas;
+using CofreEletronico.Application.Autorizacao;
 using CofreEletronico.Domain.Autenticacao;
 using CofreEletronico.Domain.Common;
 
@@ -24,16 +25,25 @@ internal sealed class ServicoIdentidadeFalso : IServicoIdentidade
         return usuario;
     }
 
-    public Task<ResultadoCriacaoUsuario> CriarAsync(NovoUsuario dados, string papel, CancellationToken cancellationToken)
+    public Task<ResultadoCriacaoUsuario> CriarUsuarioAsync(NovoUsuario dados, CancellationToken cancellationToken) =>
+        Criar(dados, [Papeis.Usuario]);
+
+    public Task<ResultadoCriacaoUsuario> CriarAdministradorAsync(NovoUsuario dados, CancellationToken cancellationToken) =>
+        Criar(dados, [Papeis.Admin, Papeis.Usuario]);
+
+    private Task<ResultadoCriacaoUsuario> Criar(NovoUsuario dados, string[] papeis)
     {
         if (ErrosNaCriacao is not null)
             return Task.FromResult(ResultadoCriacaoUsuario.Invalido(ErrosNaCriacao));
 
-        var usuario = new UsuarioAutenticado(Guid.NewGuid(), dados.Email, [papel]);
+        var usuario = new UsuarioAutenticado(Guid.NewGuid(), dados.Email, papeis.ToArray());
         return Task.FromResult(_porEmail.TryAdd(dados.Email, (usuario, dados.Senha))
             ? ResultadoCriacaoUsuario.Criado(usuario)
             : ResultadoCriacaoUsuario.EmailEmUso());
     }
+
+    public Task<bool> ExisteUsuarioComPapelAsync(string papel, CancellationToken cancellationToken) =>
+        Task.FromResult(_porEmail.Values.Any(v => v.Usuario.Papeis.Contains(papel)));
 
     public Task<UsuarioAutenticado?> VerificarCredenciaisAsync(string email, string senha, CancellationToken cancellationToken)
     {

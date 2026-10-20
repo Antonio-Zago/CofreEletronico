@@ -1,4 +1,5 @@
 using CofreEletronico.Application.Autenticacao.Portas;
+using CofreEletronico.Application.Autorizacao;
 using CofreEletronico.Infrastructure.Persistencia;
 using CofreEletronico.Infrastructure.Persistencia.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -18,7 +19,17 @@ internal sealed class ServicoIdentidade(
     VerificacaoSenhaFicticia senhaFicticia,
     ILogger<ServicoIdentidade> logger) : IServicoIdentidade
 {
-    public async Task<ResultadoCriacaoUsuario> CriarAsync(NovoUsuario dados, string papel, CancellationToken cancellationToken)
+    private static readonly string[] PapeisUsuario = [Papeis.Usuario];
+    private static readonly string[] PapeisAdministrador = [Papeis.Admin, Papeis.Usuario];
+
+    public Task<ResultadoCriacaoUsuario> CriarUsuarioAsync(NovoUsuario dados, CancellationToken cancellationToken) =>
+        CriarComPapeisAsync(dados, PapeisUsuario, cancellationToken);
+
+    public Task<ResultadoCriacaoUsuario> CriarAdministradorAsync(NovoUsuario dados, CancellationToken cancellationToken) =>
+        CriarComPapeisAsync(dados, PapeisAdministrador, cancellationToken);
+
+    /// <summary>Papéis sempre vêm das constantes acima, nunca de quem chama a porta.</summary>
+    private async Task<ResultadoCriacaoUsuario> CriarComPapeisAsync(NovoUsuario dados, string[] papeis, CancellationToken cancellationToken)
     {
         var usuario = new Usuario
         {
@@ -31,19 +42,20 @@ internal sealed class ServicoIdentidade(
 
         try
         {
-            // Usuário e papel na mesma transação: não pode existir usuário sem o papel Usuario.
+            // Usuário e papéis na mesma transação: não pode existir usuário sem os papéis pedidos.
             await using var transacao = await db.Database.BeginTransactionAsync(cancellationToken);
 
             var criacao = await userManager.CreateAsync(usuario, dados.Senha);
             if (!criacao.Succeeded)
                 return Mapear(criacao); // o dispose da transação faz o rollback
 
-            var atribuicao = await userManager.AddToRoleAsync(usuario, papel);
+            var atribuicao = await userManager.AddToRolesAsync(usuario, papeis);
             if (!atribuicao.Succeeded)
             {
                 // Papel inexistente ou erro inesperado: é falha do servidor, não do cliente.
                 throw new InvalidOperationException(
-                    $"Falha ao atribuir o papel '{papel}' ao novo usuário: {string.Join(", ", atribuicao.Errors.Select(e => e.Code))}.");
+                    $"Falha ao atribuir os papéis '{string.Join(", ", papeis)}' ao novo usuário: " +
+                    $"{string.Join(", ", atribuicao.Errors.Select(e => e.Code))}.");
             }
 
             await transacao.CommitAsync(cancellationToken);
@@ -54,7 +66,15 @@ internal sealed class ServicoIdentidade(
             return ResultadoCriacaoUsuario.EmailEmUso();
         }
 
-        return ResultadoCriacaoUsuario.Criado(new UsuarioAutenticado(usuario.Id, usuario.Email, [papel]));
+        return ResultadoCriacaoUsuario.Criado(new UsuarioAutenticado(usuario.Id, usuario.Email, papeis.ToArray()));
+    }
+
+    /// <summary>Consulta direta (sem carregar usuários), pelo nome normalizado do papel.</summary>
+    public Task<bool> ExisteUsuarioComPapelAsync(string papel, CancellationToken cancellationToken)
+    {
+        var normalizado = userManager.NormalizeName(papel);
+        return db.UserRoles.AsNoTracking()
+            .AnyAsync(ur => db.Roles.Any(r => r.Id == ur.RoleId && r.NormalizedName == normalizado), cancellationToken);
     }
 
     /// <remarks>
@@ -143,8 +163,23 @@ internal sealed class ServicoIdentidade(
             .Select(u => u.LockoutEnd)
             .SingleOrDefaultAsync(cancellationToken);
         // Igualdade exata (fimBloqueio truncado a µs): foi ESTA falha que bloqueou a conta.
-        if (bloqueadoAte == fimBloqueio)
+        if (bloqueadoAte != fimBloqueio)
+            return;
+
+        // Caminho raro (só quando ESTA falha bloqueou): vale a consulta extra para destacar o bloqueio de um
+        // administrador, possível sinal de bloqueio dirigido (ver README, "Administrador inicial"). Sem e-mail.
+        if (await TemPapelAsync(usuarioId, Papeis.Admin, cancellationToken))
+            logger.LogWarning("Conta administradora {UsuarioId} bloqueada por tentativas de login com senha errada.", usuarioId);
+        else
             logger.LogWarning("Conta {UsuarioId} bloqueada após tentativas de login com senha errada.", usuarioId);
+    }
+
+    private Task<bool> TemPapelAsync(Guid usuarioId, string papel, CancellationToken cancellationToken)
+    {
+        var normalizado = userManager.NormalizeName(papel);
+        return db.UserRoles.AsNoTracking()
+            .AnyAsync(ur => ur.UserId == usuarioId && db.Roles.Any(r => r.Id == ur.RoleId && r.NormalizedName == normalizado),
+                cancellationToken);
     }
 
     /// <summary>

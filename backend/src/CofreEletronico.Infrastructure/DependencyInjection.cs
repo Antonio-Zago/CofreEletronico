@@ -1,5 +1,6 @@
 using CofreEletronico.Application.Autenticacao.Portas;
 using CofreEletronico.Infrastructure.Autenticacao;
+using CofreEletronico.Infrastructure.Autorizacao;
 using CofreEletronico.Infrastructure.Criptografia;
 using CofreEletronico.Infrastructure.Persistencia;
 using CofreEletronico.Infrastructure.Persistencia.Identity;
@@ -42,6 +43,7 @@ public static class DependencyInjection
             .AddErrorDescriber<DescritorErrosIdentityPtBr>();
 
         AddAutenticacao(services, configuration);
+        AddAdminInicial(services, configuration);
 
         return services;
     }
@@ -76,5 +78,15 @@ public static class DependencyInjection
         services.AddHostedService<PreaquecimentoVerificacaoSenha>();
         services.AddScoped<IServicoIdentidade, ServicoIdentidade>();
         services.AddScoped<IRefreshTokenRepositorio, RefreshTokenRepositorio>();
+    }
+
+    private static void AddAdminInicial(IServiceCollection services, IConfiguration configuration)
+    {
+        // Opcional (sem e-mail e senha, nada é feito); se configurada, inválida impede a subida.
+        // Lida de user-secrets ou de AdminInicial__Email/AdminInicial__Senha (nunca de appsettings).
+        services.AddOptions<AdminInicialOpcoes>()
+            .Bind(configuration.GetSection(AdminInicialOpcoes.Secao))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AdminInicialOpcoes>, AdminInicialOpcoesValidador>();
     }
 }

@@ -27,7 +27,8 @@ internal static class InfrastructureFixture
         string? connectionString = ConnectionStringFicticia,
         IDictionary<string, string?>? configuracaoExtra = null,
         TimeProvider? relogio = null,
-        string ambiente = CriptografiaOpcoes.AmbienteTestes)
+        string ambiente = CriptografiaOpcoes.AmbienteTestes,
+        Action<IServiceCollection>? configurarServicos = null)
     {
         var valores = new Dictionary<string, string?>
         {
@@ -59,6 +60,7 @@ internal static class InfrastructureFixture
         }
 
         services.AddInfrastructure(configuration);
+        configurarServicos?.Invoke(services); // ex.: AddApplication e fakes de portas
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }

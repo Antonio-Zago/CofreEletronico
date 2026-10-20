@@ -1,4 +1,5 @@
 using CofreEletronico.Application.Autenticacao.Portas;
+using CofreEletronico.Application.Autorizacao;
 using CofreEletronico.Domain.Autenticacao;
 
 namespace CofreEletronico.Application.Tests.Autenticacao;
@@ -21,7 +22,12 @@ internal sealed class ServicoIdentidadeFalso : IServicoIdentidade
 
     public IReadOnlyDictionary<string, string[]>? ErrosNaCriacao { get; set; }
 
-    public List<(NovoUsuario Dados, string Papel)> Criados { get; } = [];
+    public List<(NovoUsuario Dados, IReadOnlyCollection<string> Papeis)> Criados { get; } = [];
+
+    /// <summary>Executado no início de <see cref="Criar"/> (ex.: simular outra instância criando o Admin).</summary>
+    public Action? AntesDeCriar { get; set; }
+
+    public int ConsultasPorPapel { get; private set; }
 
     public UsuarioAutenticado Adicionar(string email, string senha, params string[] papeis)
     {
@@ -36,16 +42,30 @@ internal sealed class ServicoIdentidadeFalso : IServicoIdentidade
         _porEmail.Remove(email);
     }
 
-    public Task<ResultadoCriacaoUsuario> CriarAsync(NovoUsuario dados, string papel, CancellationToken cancellationToken)
+    public Task<ResultadoCriacaoUsuario> CriarUsuarioAsync(NovoUsuario dados, CancellationToken cancellationToken) =>
+        Criar(dados, [Papeis.Usuario]);
+
+    public Task<ResultadoCriacaoUsuario> CriarAdministradorAsync(NovoUsuario dados, CancellationToken cancellationToken) =>
+        Criar(dados, [Papeis.Admin, Papeis.Usuario]);
+
+    private Task<ResultadoCriacaoUsuario> Criar(NovoUsuario dados, string[] papeis)
     {
+        AntesDeCriar?.Invoke();
+
         if (ErrosNaCriacao is not null)
             return Task.FromResult(ResultadoCriacaoUsuario.Invalido(ErrosNaCriacao));
 
         if (_porEmail.ContainsKey(dados.Email))
             return Task.FromResult(ResultadoCriacaoUsuario.EmailEmUso());
 
-        Criados.Add((dados, papel));
-        return Task.FromResult(ResultadoCriacaoUsuario.Criado(Adicionar(dados.Email, dados.Senha, papel)));
+        Criados.Add((dados, papeis));
+        return Task.FromResult(ResultadoCriacaoUsuario.Criado(Adicionar(dados.Email, dados.Senha, papeis.ToArray())));
+    }
+
+    public Task<bool> ExisteUsuarioComPapelAsync(string papel, CancellationToken cancellationToken)
+    {
+        ConsultasPorPapel++;
+        return Task.FromResult(_porEmail.Values.Any(v => v.Usuario.Papeis.Contains(papel)));
     }
 
     /// <summary>
