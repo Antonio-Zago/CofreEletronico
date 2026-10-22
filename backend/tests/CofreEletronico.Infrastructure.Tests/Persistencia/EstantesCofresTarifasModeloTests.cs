@@ -46,7 +46,7 @@ public sealed class EstantesCofresTarifasModeloTests : IDisposable
         var estante = Entidade(typeof(Estante));
 
         Assert.Equal(
-            ["ativa", "criado_em", "device_id", "endereco", "id", "latitude", "longitude", "nome", "online", "segredo_hmac", "ultimo_heartbeat"],
+            ["ativa", "criado_em", "device_id", "endereco", "id", "latitude", "longitude", "nome", "online", "segredo_hmac", "ultimo_heartbeat", "xmin"],
             Colunas(estante));
 
         Assert.Equal("character varying(100)", Tipo(estante, nameof(Estante.Nome)));
@@ -181,7 +181,21 @@ public sealed class EstantesCofresTarifasModeloTests : IDisposable
     }
 
     [Fact]
-    public void Nao_ha_token_de_concorrencia_ainda()
+    public void Estantes_usam_xmin_como_token_de_concorrencia()
+    {
+        var estante = Entidade(typeof(Estante));
+        var versao = Assert.Single(estante.GetProperties(), p => p.IsConcurrencyToken);
+
+        Assert.Equal("Versao", versao.Name);
+        Assert.True(versao.IsShadowProperty());
+        Assert.Equal(typeof(uint), versao.ClrType);
+        Assert.Equal("xmin", versao.GetColumnName());
+        Assert.Equal("xid", versao.GetColumnType());
+        Assert.Equal(ValueGenerated.OnAddOrUpdate, versao.ValueGenerated);
+    }
+
+    [Fact]
+    public void Cofres_ainda_nao_tem_token_de_concorrencia()
     {
         // A reserva (T-0702) decide o controle de concorrência.
         Assert.DoesNotContain(Entidade(typeof(Cofre)).GetProperties(), p => p.IsConcurrencyToken);

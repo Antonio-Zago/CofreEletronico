@@ -60,6 +60,30 @@ public class DependencyRulesTests
             "Microsoft.IdentityModel", "System.IdentityModel.Tokens.Jwt", "Microsoft.AspNetCore");
     }
 
+    [Fact]
+    public void DTOs_da_Application_nao_expoem_tipos_do_Domain()
+    {
+        // "Nunca devolva entidade de domínio em endpoint": os DTOs (o que a Api serializa) só carregam tipos simples
+        // ou outros DTOs. Uma propriedade com entidade (ou coleção de entidades) vazaria campos internos/segredos.
+        var dtos = ApplicationAssembly.GetTypes()
+            .Where(t => t.IsPublic && t.Name.Split('`')[0].EndsWith("Dto", StringComparison.Ordinal))
+            .ToList();
+        Assert.NotEmpty(dtos);
+
+        var violacoes = dtos
+            .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => UsaTipoDoDomain(p.PropertyType))
+                .Select(p => $"{t.Name}.{p.Name}"))
+            .ToList();
+
+        Assert.True(violacoes.Count == 0, "DTOs com tipos do Domain: " + string.Join(", ", violacoes));
+    }
+
+    private static bool UsaTipoDoDomain(Type tipo) =>
+        (tipo.Assembly == DomainAssembly && !tipo.IsEnum) || // enums (ex.: status) podem ser serializados
+        (tipo.IsArray && UsaTipoDoDomain(tipo.GetElementType()!)) ||
+        (tipo.IsGenericType && tipo.GetGenericArguments().Any(UsaTipoDoDomain));
+
     private static void AssertSemDependencia(Assembly assembly, params string[] proibidas)
     {
         var resultado = Types.InAssembly(assembly)

@@ -22,6 +22,9 @@ internal sealed class EstanteConfiguracao : IEntityTypeConfiguration<Estante>
 
     private const string CampoSegredoHmac = "_segredoHmac";
 
+    /// <summary>Shadow property do token de concorrência (coluna de sistema <c>xmin</c>).</summary>
+    public const string PropriedadeVersao = "Versao";
+
     public void Configure(EntityTypeBuilder<Estante> builder)
     {
         builder.ToTable(Tabela, t =>
@@ -45,6 +48,16 @@ internal sealed class EstanteConfiguracao : IEntityTypeConfiguration<Estante>
         builder.Property(e => e.CriadoEm).IsRequired();
 
         builder.HasIndex(e => e.DeviceId).IsUnique().HasDatabaseName("ix_estantes_device_id");
+
+        // Concorrência otimista pela coluna de sistema xmin do PostgreSQL (muda a cada UPDATE da linha). Shadow
+        // property: o domínio não conhece. Duas alterações simultâneas da mesma estante (ex.: duas regenerações de
+        // credenciais) não se sobrescrevem: a segunda recebe DbUpdateConcurrencyException (409 na Api).
+        // xmin já existe em toda tabela: a migration não cria coluna.
+        builder.Property<uint>(PropriedadeVersao)
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
 
         // Sem índice em `ativa`: booleano de baixa cardinalidade (quase todas as estantes ativas) não ajuda o
         // planner. A busca por proximidade (T-0501) define o índice que fizer sentido para ela.

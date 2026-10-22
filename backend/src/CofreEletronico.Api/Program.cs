@@ -1,4 +1,5 @@
 using CofreEletronico.Api.Autenticacao;
+using CofreEletronico.Api.Endpoints.Admin;
 using CofreEletronico.Api.Endpoints.Auth;
 using CofreEletronico.Application;
 using CofreEletronico.Infrastructure;
@@ -18,7 +19,15 @@ builder.Services.AddRateLimitAuth(builder.Configuration);
 
 builder.Services.AddSwaggerComBearer();
 
+// Exceção não tratada → 500 em ProblemDetails genérico (sem mensagem nem stack trace; ver ProblemasGenericos).
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = ProblemasGenericos.Personalizar);
+
 var app = builder.Build();
+
+// Início do pipeline: envolve tudo o que vem depois. Em Development, a página de exceção do desenvolvedor
+// (adicionada automaticamente pelo WebApplication) mostra o detalhe; nos demais ambientes, só o ProblemDetails genérico.
+if (!app.Environment.IsDevelopment())
+    app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
@@ -46,6 +55,9 @@ app.MapGet("/ping", () => Results.Ok("pong"))
     .WithOpenApi();
 
 app.MapAuthEndpoints();
+
+// Única origem das rotas /admin (política Admin aplicada no grupo). Nunca mapeie /admin fora dele.
+app.MapAdminEndpoints();
 
 app.Run();
 

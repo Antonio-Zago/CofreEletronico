@@ -102,6 +102,35 @@ Todo endpoint exige um access token válido, a menos que seja marcado com `Allow
 
 Os papéis vêm da claim `role` do access token, emitida no login/refresh. Uma mudança de papel só vale no próximo refresh (até 15 min).
 
+## Administração de estantes
+
+Rotas em `/admin/estantes` (papel `Admin`; contrato em [../docs/ARQUITETURA.md](../docs/ARQUITETURA.md), "Contrato REST: administração"): cadastro, listagem paginada, detalhe, edição, desativação/reativação (exclusão lógica) e regeneração de credenciais.
+
+O cadastro (`POST /admin/estantes`) e a regeneração (`POST /admin/estantes/{id}/credenciais`) devolvem **uma única vez** as credenciais do ESP32: `deviceId`, `segredoHmac` (32 bytes em hex), `usuarioMqtt` (= `deviceId`) e `senhaMqtt` (24 caracteres `[A-Za-z0-9]`). O segredo HMAC fica cifrado no banco; a senha MQTT **não é armazenada** no backend. Essas respostas levam `Cache-Control: no-store`. Credenciais perdidas: regenere (o `deviceId` não muda).
+
+Depois de cadastrar ou regenerar, na raiz do repositório:
+
+1. Cadastre (ou troque) a senha no Mosquitto e **cole a `senhaMqtt` no prompt** do script (a digitação não ecoa):
+
+   ```bash
+   infra/mosquitto/criar-usuario.sh <deviceId>
+   ```
+
+   Não use `MQTT_SENHA=... infra/mosquitto/criar-usuario.sh` nem `export MQTT_SENHA=...` na linha de comando: a senha ficaria no histórico do shell (e visível no ambiente do processo).
+2. Recarregue o broker para valer a senha nova: `docker compose kill -s HUP mosquitto`.
+3. Grave no ESP32 o `deviceId`, a `senhaMqtt` e o `segredoHmac`.
+
+**Revogação:** ao regenerar, o backend passa a assinar os comandos com o segredo novo na hora, mas a senha MQTT antiga **continua aceita pelo broker até o passo 2**, e o ESP32 só volta a operar depois do passo 3. A revogação só fica completa depois de trocar a senha no broker (passos 1 e 2) e regravar o ESP32 (passo 3).
+
+Proteções do grupo `/admin` (todas por administrador, pela claim `sub` do token; token sem `sub` com Guid válido recebe 401):
+
+- Rate limit geral de 120 requisições/min (`RateLimit:Admin`) e, somadas entre `POST /admin/estantes` e `POST /admin/estantes/{id}/credenciais`, 10/min (`RateLimit:AdminSensivel`). Cada subseção tem `Limite` e `JanelaSegundos`. Ao exceder: 429 com `Retry-After`.
+- Concorrência otimista na tabela `estantes` (coluna de sistema `xmin`): se duas operações alteram a mesma estante ao mesmo tempo (por exemplo, duas regenerações), a segunda recebe 409 e nada é gravado. Na regeneração com 409, as credenciais não são devolvidas: recarregue e tente de novo.
+
+## Erros inesperados
+
+Fora de Development, uma exceção não tratada devolve 500 em ProblemDetails com título e detalhe genéricos (`Erro interno`), sem mensagem nem stack trace. A exceção completa vai só para o log, correlacionada pelo `traceId` da resposta. Em Development aparece a página de exceção do desenvolvedor.
+
 ## Administrador inicial
 
 Na subida, em todos os ambientes (depois das migrations em Development), a Api cria um administrador (papéis `Admin` e `Usuario`) a partir da seção `AdminInicial`, **se ainda não existir nenhum Admin**. A seção é opcional e, como os outros segredos, **nunca** vai para `appsettings*.json` nem para o git.

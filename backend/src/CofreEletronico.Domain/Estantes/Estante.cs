@@ -102,13 +102,7 @@ public sealed partial class Estante : Entity
         if (deviceId is null || !DeviceIdRegex().IsMatch(deviceId))
             throw new ExcecaoDominio("O device_id deve ter o formato 'est-' seguido de 6 caracteres [a-z0-9].");
 
-        if (segredoHmac is null ||
-            segredoHmac.Length < SegredoHmacTamanhoMinimoBytes ||
-            segredoHmac.Length > SegredoHmacTamanhoMaximoBytes)
-        {
-            throw new ExcecaoDominio(
-                $"O segredo HMAC deve ter entre {SegredoHmacTamanhoMinimoBytes} e {SegredoHmacTamanhoMaximoBytes} bytes.");
-        }
+        ValidarSegredoHmac(segredoHmac);
 
         return new Estante(
             Guid.NewGuid(), nomeValido, enderecoValido, latitude, longitude,
@@ -126,6 +120,17 @@ public sealed partial class Estante : Entity
         Endereco = enderecoValido;
         Latitude = latitude;
         Longitude = longitude;
+    }
+
+    /// <summary>
+    /// Troca o segredo HMAC (regeneração de credenciais): o anterior deixa de valer assim que a troca for salva.
+    /// Mesma validação do cadastro. Guarda uma cópia (alterar depois o array recebido não afeta a entidade).
+    /// O device_id não muda.
+    /// </summary>
+    public void SubstituirSegredoHmac(byte[] novoSegredo)
+    {
+        ValidarSegredoHmac(novoSegredo);
+        _segredoHmac = (byte[])novoSegredo.Clone();
     }
 
     /// <summary>Exclusão lógica. Idempotente.</summary>
@@ -158,6 +163,17 @@ public sealed partial class Estante : Entity
         if (aparado.Length > tamanhoMaximo)
             throw new ExcecaoDominio($"O {campo} da estante deve ter no máximo {tamanhoMaximo} caracteres.");
         return aparado;
+    }
+
+    private static void ValidarSegredoHmac(byte[]? segredoHmac)
+    {
+        if (segredoHmac is null ||
+            segredoHmac.Length < SegredoHmacTamanhoMinimoBytes ||
+            segredoHmac.Length > SegredoHmacTamanhoMaximoBytes)
+        {
+            throw new ExcecaoDominio(
+                $"O segredo HMAC deve ter entre {SegredoHmacTamanhoMinimoBytes} e {SegredoHmacTamanhoMaximoBytes} bytes.");
+        }
     }
 
     private static void ValidarCoordenadas(double latitude, double longitude)

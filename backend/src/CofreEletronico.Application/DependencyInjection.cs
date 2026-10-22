@@ -1,5 +1,6 @@
 using CofreEletronico.Application.Autenticacao;
 using CofreEletronico.Application.Autorizacao;
+using CofreEletronico.Application.Estantes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CofreEletronico.Application;
@@ -21,6 +22,15 @@ public static class DependencyInjection
 
         // Autorização (T-0303)
         services.AddScoped<GarantirAdminInicial>();
+
+        // Administração de estantes (T-0402)
+        services.AddScoped<CriarEstante>();
+        services.AddScoped<ListarEstantes>();
+        services.AddScoped<ObterEstante>();
+        services.AddScoped<AtualizarEstante>();
+        services.AddScoped<DesativarEstante>();
+        services.AddScoped<ReativarEstante>();
+        services.AddScoped<RegenerarCredenciaisEstante>();
 
         return services;
     }

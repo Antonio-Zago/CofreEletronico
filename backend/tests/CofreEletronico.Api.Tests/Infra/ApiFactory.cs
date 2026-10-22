@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Security.Claims;
 using CofreEletronico.Api.Autorizacao;
+using CofreEletronico.Api.Endpoints.Admin;
 using CofreEletronico.Application.Autenticacao.Portas;
+using CofreEletronico.Application.Estantes.Portas;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -30,14 +32,35 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     public const string RotaSemMetadado = "/teste/sem-metadado";
 
+    /// <summary>Rota que lança exceção, montada DEPOIS do pipeline do Program (passa pelo UseExceptionHandler dele).</summary>
+    public const string RotaExcecao = "/teste/excecao";
+
+    /// <summary>Mensagem da exceção de teste: não pode aparecer na resposta.</summary>
+    public const string MensagemExcecao = "detalhe-interno-que-nao-pode-vazar";
+
+    /// <summary>Prefixo do ramo de teste em que o grupo de <c>MapAdminEndpoints</c> é montado de novo.</summary>
+    public const string RamoGrupoAdmin = "/teste/grupo-admin";
+
+    /// <summary>Padrão da rota de teste registrada DENTRO do grupo admin real (aparece no EndpointDataSource).</summary>
+    public const string PadraoRotaTesteAdmin = "/admin/teste-politica";
+
+    /// <summary>URL da rota de teste do grupo admin: <see cref="RamoGrupoAdmin"/> + <see cref="PadraoRotaTesteAdmin"/>.</summary>
+    public const string RotaTesteGrupoAdmin = RamoGrupoAdmin + PadraoRotaTesteAdmin;
+
     /// <summary>Altos por padrão para não interferir; os testes de 429 criam uma fábrica com limites baixos.</summary>
     public int LimiteCredenciais { get; init; } = 10_000;
 
     public int LimiteSessao { get; init; } = 10_000;
 
+    public int LimiteAdmin { get; init; } = 10_000;
+
+    public int LimiteAdminSensivel { get; init; } = 10_000;
+
     internal ServicoIdentidadeFalso Identidade { get; } = new();
 
     internal RefreshTokenRepositorioFalso Repositorio { get; } = new();
+
+    internal EstanteRepositorioFalso Estantes { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -47,6 +70,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Criptografia:ChaveSegredos", ChaveSegredos);
         builder.UseSetting("RateLimit:AuthCredenciais:Limite", LimiteCredenciais.ToString(CultureInfo.InvariantCulture));
         builder.UseSetting("RateLimit:AuthSessao:Limite", LimiteSessao.ToString(CultureInfo.InvariantCulture));
+        builder.UseSetting("RateLimit:Admin:Limite", LimiteAdmin.ToString(CultureInfo.InvariantCulture));
+        builder.UseSetting("RateLimit:AdminSensivel:Limite", LimiteAdminSensivel.ToString(CultureInfo.InvariantCulture));
 
         builder.ConfigureTestServices(services =>
         {
@@ -54,6 +79,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IServicoIdentidade>(Identidade);
             services.RemoveAll<IRefreshTokenRepositorio>();
             services.AddSingleton<IRefreshTokenRepositorio>(Repositorio);
+            services.RemoveAll<IEstanteRepositorio>();
+            services.AddSingleton<IEstanteRepositorio>(Estantes);
 
             services.AddSingleton<IStartupFilter, EndpointProtegidoFiltro>();
         });
@@ -62,7 +89,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>
     /// Endpoints que só existem nos testes, em ramos com o mesmo pipeline de autenticação e autorização da Api:
     /// <see cref="RotaProtegida"/> (RequireAuthorization), <see cref="RotaAdmin"/> (política Admin) e
-    /// <see cref="RotaSemMetadado"/> (nenhum metadado: cai na FallbackPolicy). Devolvem o "sub" e os papéis do token.
+    /// <see cref="RotaSemMetadado"/> (nenhum metadado: cai na FallbackPolicy) e <see cref="RotaTesteGrupoAdmin"/>
+    /// (dentro do grupo de <c>MapAdminEndpoints</c>, sem metadado próprio). Devolvem o "sub" e os papéis do token.
     /// </summary>
     private sealed class EndpointProtegidoFiltro : IStartupFilter
     {
@@ -72,8 +100,29 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             Ramo(app, RotaAdmin, endpoint => endpoint.RequireAuthorization(Politicas.Admin));
             Ramo(app, RotaSemMetadado, _ => { });
 
+            // Grupo /admin montado pelo mesmo MapAdminEndpoints do Program.cs, com uma rota de teste a mais.
+            // Ramo próprio: o roteador principal não enxerga esta rota (nem duplica as rotas admin reais).
+            app.Map(RamoGrupoAdmin, ramo =>
+            {
+                ramo.UseRouting();
+                ramo.UseAuthentication();
+                ramo.UseAuthorization();
+                ramo.UseEndpoints(endpoints => endpoints.MapAdminEndpoints()
+                    .MapGet(PadraoRotaTesteAdmin[AdminEndpoints.Prefixo.Length..], Responder));
+            });
+
             next(app);
+
+            // Depois do pipeline do Program: só é alcançada quando nenhum endpoint atende, e a exceção volta
+            // pelo UseExceptionHandler do Program.
+            app.Map(RotaExcecao, ramo => ramo.Run(_ => throw new InvalidOperationException(MensagemExcecao)));
         };
+
+        private static IResult Responder(ClaimsPrincipal usuario) => Results.Ok(new
+        {
+            sub = usuario.Identity!.Name,
+            papeis = usuario.FindAll("role").Select(c => c.Value).ToArray(),
+        });
 
         private static void Ramo(IApplicationBuilder app, string rota, Action<RouteHandlerBuilder> configurar) =>
             app.Map(rota, ramo =>
@@ -81,12 +130,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ramo.UseRouting();
                 ramo.UseAuthentication();
                 ramo.UseAuthorization();
-                ramo.UseEndpoints(endpoints => configurar(endpoints
-                    .MapGet("/", (ClaimsPrincipal usuario) => Results.Ok(new
-                    {
-                        sub = usuario.Identity!.Name,
-                        papeis = usuario.FindAll("role").Select(c => c.Value).ToArray(),
-                    }))));
+                ramo.UseEndpoints(endpoints => configurar(endpoints.MapGet("/", Responder)));
             });
     }
 }

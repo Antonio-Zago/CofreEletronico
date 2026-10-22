@@ -107,6 +107,50 @@ Regras:
 - Bloqueio por tentativas: 5 falhas bloqueiam a conta por 15 min. A resposta é o mesmo 401 genérico.
 - Endpoints protegidos (demais rotas): `Authorization: Bearer <accessToken>`. Sem token ou com token inválido: 401. Sem o papel exigido: 403.
 
+## Contrato REST: administração
+
+Regras gerais do grupo:
+- Base `/admin`. JSON com nomes em camelCase.
+- Todas as rotas exigem `Authorization: Bearer <accessToken>` com o papel `Admin`. Sem token ou com token inválido: 401. Token sem claim `sub` válida (id do usuário): 401. Sem o papel: 403. Todos em ProblemDetails.
+- Erro de validação: 400 (ProblemDetails). Recurso inexistente: 404. Conflito de regra de negócio: 409.
+- Respostas nunca expõem o segredo HMAC nem a senha MQTT, exceto nas duas rotas que devolvem `credenciais` (abaixo), e apenas uma vez.
+- Rate limit do grupo, particionado pelo `sub` do admin:
+  - geral: 120 requisições/min;
+  - rotas sensíveis (`POST /admin/estantes` e `POST /admin/estantes/{id}/credenciais`): 10 requisições/min, somadas entre as duas;
+  - ao exceder: 429 com cabeçalho `Retry-After`.
+- Erro inesperado: 500 em ProblemDetails com mensagem genérica (sem detalhes internos).
+
+### Estantes
+
+| Método e rota | Corpo | Sucesso | Erros |
+|---|---|---|---|
+| `POST /admin/estantes` | `{ nome, endereco, latitude, longitude }` | 201 + estante + `credenciais`; cabeçalho `Location: /admin/estantes/{id}` | 400 |
+| `GET /admin/estantes?ativa=&pagina=&tamanhoPagina=` | — | 200 `{ itens: [estante], pagina, tamanhoPagina, total }`. Padrão: `pagina` 1, `tamanhoPagina` 20 (máximo 100). Sem `ativa`, lista todas. Ordenado por nome | 400 |
+| `GET /admin/estantes/{id}` | — | 200 estante | 404 |
+| `PUT /admin/estantes/{id}` | `{ nome, endereco, latitude, longitude }` | 200 estante | 400, 404; 409 se outra alteração da mesma estante for gravada ao mesmo tempo (concorrência) |
+| `POST /admin/estantes/{id}/desativar` | — | 200 estante (idempotente) | 404; 409 se algum cofre estiver `reservado` ou `ocupado`; 409 se outra alteração da mesma estante for gravada ao mesmo tempo (concorrência) |
+| `POST /admin/estantes/{id}/reativar` | — | 200 estante (idempotente) | 404; 409 se outra alteração da mesma estante for gravada ao mesmo tempo (concorrência) |
+| `POST /admin/estantes/{id}/credenciais` | — | 200 `credenciais` novas. O backend passa a assinar com o novo segredo imediatamente. A revogação só fica completa depois que o admin (1) troca a senha do usuário no Mosquitto (`infra/mosquitto/criar-usuario.sh <deviceId>`, colando a senha no prompt, seguido de `docker compose kill -s HUP mosquitto`) e (2) regrava o ESP32 com o novo segredo e a nova senha. Até lá, a senha MQTT antiga continua aceita pelo broker e o ESP32 continua aceitando o segredo antigo | 404; 409 se outra alteração da mesma estante for gravada durante a regeneração (concorrência) |
+
+Objeto estante:
+
+```json
+{ "id": "guid", "nome": "...", "endereco": "...", "latitude": 0.0, "longitude": 0.0, "deviceId": "est-7k2m9q", "online": false, "ultimoHeartbeat": "ISO-8601 UTC ou null", "ativa": true, "criadoEm": "ISO-8601 UTC" }
+```
+
+Objeto `credenciais` (exibido uma única vez):
+
+```json
+{ "deviceId": "est-7k2m9q", "segredoHmac": "64 caracteres hex", "usuarioMqtt": "est-7k2m9q", "senhaMqtt": "24 caracteres" }
+```
+
+- `segredoHmac`: 32 bytes em hexadecimal minúsculo (64 caracteres), para gravar na NVS do ESP32.
+- `usuarioMqtt`: igual ao `deviceId`.
+- `senhaMqtt`: 24 caracteres aleatórios. Não é armazenada no backend. O admin a cadastra no Mosquitto com `infra/mosquitto/criar-usuario.sh <deviceId>` e a grava no ESP32.
+- Credenciais perdidas: a única saída é regenerá-las (`POST /admin/estantes/{id}/credenciais`).
+
+Geração do `deviceId`: aleatório, formato `est-` + 6 caracteres `[a-z0-9]`, com nova tentativa em caso de colisão.
+
 ## Modelo de dados (evolução do DER.drawio)
 
 | Tabela | Campos principais | Observação |

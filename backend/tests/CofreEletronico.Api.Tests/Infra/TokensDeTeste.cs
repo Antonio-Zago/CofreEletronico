@@ -36,6 +36,31 @@ internal static class TokensDeTeste
         });
     }
 
+    /// <summary>
+    /// Token válido (assinado com a chave de teste) com <c>sub</c> arbitrário: <paramref name="sub"/> nulo omite a claim.
+    /// Para testar a exigência de <c>sub</c> com Guid válido nas rotas admin.
+    /// </summary>
+    public static string ComSub(string? sub, params string[] papeis)
+    {
+        var agora = DateTime.UtcNow;
+        var claims = new List<Claim>();
+        if (sub is not null)
+            claims.Add(new Claim("sub", sub));
+        claims.AddRange(papeis.Select(p => new Claim("role", p)));
+
+        return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+        {
+            Issuer = Emissor,
+            Audience = Audiencia,
+            Subject = new ClaimsIdentity(claims),
+            IssuedAt = agora,
+            NotBefore = agora,
+            Expires = agora.AddMinutes(15),
+            SigningCredentials = new SigningCredentials(
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(ApiFactory.ChaveJwt)), SecurityAlgorithms.HmacSha256),
+        });
+    }
+
     /// <summary>Mesmo payload de um token válido, com cabeçalho <c>alg=none</c> e sem assinatura.</summary>
     public static string SemAssinatura(params string[] papeis)
     {

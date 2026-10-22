@@ -266,4 +266,58 @@ public class EstanteTests
         Assert.False(estante.Online);
         Assert.Equal(Agora, estante.UltimoHeartbeat);
     }
+
+    // ---------- SubstituirSegredoHmac (T-0402) ----------
+
+    [Theory]
+    [InlineData(32)]
+    [InlineData(48)]
+    [InlineData(64)]
+    public void SubstituirSegredoHmac_troca_o_segredo_e_mantem_o_device_id(int tamanho)
+    {
+        var estante = Criar();
+        var novo = Enumerable.Range(100, tamanho).Select(i => (byte)i).ToArray();
+
+        estante.SubstituirSegredoHmac(novo);
+
+        Assert.Equal(novo, estante.ObterSegredoHmac());
+        Assert.Equal("est-7k2m9q", estante.DeviceId);
+    }
+
+    [Fact]
+    public void SubstituirSegredoHmac_guarda_copia_do_array_recebido()
+    {
+        var estante = Criar();
+        var novo = Enumerable.Range(100, 32).Select(i => (byte)i).ToArray();
+        var esperado = (byte[])novo.Clone();
+
+        estante.SubstituirSegredoHmac(novo);
+        Array.Clear(novo);
+
+        Assert.Equal(esperado, estante.ObterSegredoHmac());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(16)]
+    [InlineData(31)]
+    [InlineData(65)]
+    public void SubstituirSegredoHmac_com_tamanho_invalido_lanca_e_mantem_o_anterior(int tamanho)
+    {
+        var estante = Criar();
+
+        var ex = Assert.Throws<ExcecaoDominio>(() => estante.SubstituirSegredoHmac(new byte[tamanho]));
+
+        Assert.Contains("segredo HMAC", ex.Message);
+        Assert.Equal(Segredo, estante.ObterSegredoHmac());
+    }
+
+    [Fact]
+    public void SubstituirSegredoHmac_nulo_lanca_ExcecaoDominio()
+    {
+        var estante = Criar();
+
+        Assert.Throws<ExcecaoDominio>(() => estante.SubstituirSegredoHmac(null!));
+        Assert.Equal(Segredo, estante.ObterSegredoHmac());
+    }
 }

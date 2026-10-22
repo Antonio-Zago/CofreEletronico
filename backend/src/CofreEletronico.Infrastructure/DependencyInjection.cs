@@ -1,7 +1,9 @@
 using CofreEletronico.Application.Autenticacao.Portas;
+using CofreEletronico.Application.Estantes.Portas;
 using CofreEletronico.Infrastructure.Autenticacao;
 using CofreEletronico.Infrastructure.Autorizacao;
 using CofreEletronico.Infrastructure.Criptografia;
+using CofreEletronico.Infrastructure.Estantes;
 using CofreEletronico.Infrastructure.Persistencia;
 using CofreEletronico.Infrastructure.Persistencia.Identity;
 using CofreEletronico.Infrastructure.Persistencia.Repositorios;
@@ -44,6 +46,7 @@ public static class DependencyInjection
 
         AddAutenticacao(services, configuration);
         AddAdminInicial(services, configuration);
+        AddEstantes(services);
 
         return services;
     }
@@ -78,6 +81,13 @@ public static class DependencyInjection
         services.AddHostedService<PreaquecimentoVerificacaoSenha>();
         services.AddScoped<IServicoIdentidade, ServicoIdentidade>();
         services.AddScoped<IRefreshTokenRepositorio, RefreshTokenRepositorio>();
+    }
+
+    private static void AddEstantes(IServiceCollection services)
+    {
+        // Sem estado: singleton. O repositório usa o DbContext da requisição: scoped.
+        services.AddSingleton<IGeradorCredenciaisEstante, GeradorCredenciaisEstanteSeguro>();
+        services.AddScoped<IEstanteRepositorio, EstanteRepositorio>();
     }
 
     private static void AddAdminInicial(IServiceCollection services, IConfiguration configuration)

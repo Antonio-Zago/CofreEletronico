@@ -108,11 +108,11 @@ Critérios de aceite:
 | Nº Tarefa | Tarefa | Componente | Prioridade | Sprint | Pts | Status |
 |---|---|---|---|---|---|---|
 | T-0401 | Entidades Estante, Cofre, Tarifa + migrations | Backend | P1 | 2 | 2 | Concluído |
-| T-0402 | CRUD /admin/estantes (gera device_id, credenciais MQTT e segredo HMAC) | Backend | P1 | 2 | 3 | A fazer |
+| T-0402 | CRUD /admin/estantes (gera device_id, credenciais MQTT e segredo HMAC) | Backend | P1 | 2 | 3 | Concluído |
 | T-0403 | CRUD /admin/estantes/{id}/cofres (número, canal do relé, tamanho) | Backend | P1 | 2 | 2 | A fazer |
 | T-0404 | CRUD /admin/tarifas (valor por hora, tempo mínimo por tamanho) | Backend | P1 | 2 | 2 | A fazer |
 | T-0405 | Colocar cofre em manutenção / reativar | Backend | P2 | 2 | 1 | A fazer |
-| T-0406 | Políticas de autorização: rotas /admin apenas para Admin | Backend | P1 | 2 | 1 | A fazer |
+| T-0406 | Políticas de autorização: rotas /admin apenas para Admin | Backend | P1 | 2 | 1 | Concluído |
 
 ### US-05 · P1
 
@@ -163,6 +163,7 @@ Critérios de aceite:
 - [ ] Dois usuários não conseguem reservar o mesmo cofre ao mesmo tempo
 - [ ] Webhook do Mercado Pago ativa a locação de forma idempotente
 - [ ] Pix não pago em N minutos cancela a reserva e libera o cofre
+- [ ] A reserva só é feita se a estante e o cofre estiverem ativos, conferido na própria escrita condicional (fecha a corrida com a desativação da estante, T-0402)
 
 | Nº Tarefa | Tarefa | Componente | Prioridade | Sprint | Pts | Status |
 |---|---|---|---|---|---|---|
