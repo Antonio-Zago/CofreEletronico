@@ -1,5 +1,6 @@
 using CofreEletronico.Api.Autenticacao;
 using CofreEletronico.Api.Autorizacao;
+using CofreEletronico.Api.Endpoints.Admin.Cofres;
 using CofreEletronico.Api.Endpoints.Admin.Estantes;
 using Microsoft.AspNetCore.Mvc;
 
@@ -42,6 +43,7 @@ public static class AdminEndpoints
 
         // Sub-grupos administrativos (um método de extensão sobre o grupo por funcionalidade):
         grupo.MapEstantesAdmin(); // T-0402, /admin/estantes
+        grupo.MapCofresAdmin(); // T-0403/T-0405, /admin/estantes/{estanteId}/cofres
 
         return grupo;
     }

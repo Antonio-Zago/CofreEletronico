@@ -3,6 +3,7 @@ using System.Security.Claims;
 using CofreEletronico.Api.Autorizacao;
 using CofreEletronico.Api.Endpoints.Admin;
 using CofreEletronico.Application.Autenticacao.Portas;
+using CofreEletronico.Application.Cofres.Portas;
 using CofreEletronico.Application.Estantes.Portas;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -62,6 +63,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     internal EstanteRepositorioFalso Estantes { get; } = new();
 
+    private CofreRepositorioFalso? _cofres;
+
+    /// <summary>Cofres em memória; enxerga as estantes de <see cref="Estantes"/>.</summary>
+    internal CofreRepositorioFalso Cofres => _cofres ??= new CofreRepositorioFalso(Estantes);
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Fora de Development: sem user-secrets, sem migrations e sem Swagger.
@@ -81,6 +87,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IRefreshTokenRepositorio>(Repositorio);
             services.RemoveAll<IEstanteRepositorio>();
             services.AddSingleton<IEstanteRepositorio>(Estantes);
+            services.RemoveAll<ICofreRepositorio>();
+            services.AddSingleton<ICofreRepositorio>(Cofres);
 
             services.AddSingleton<IStartupFilter, EndpointProtegidoFiltro>();
         });

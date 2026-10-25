@@ -1,5 +1,6 @@
 using CofreEletronico.Application.Autenticacao;
 using CofreEletronico.Application.Autorizacao;
+using CofreEletronico.Application.Cofres;
 using CofreEletronico.Application.Estantes;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -31,6 +32,16 @@ public static class DependencyInjection
         services.AddScoped<DesativarEstante>();
         services.AddScoped<ReativarEstante>();
         services.AddScoped<RegenerarCredenciaisEstante>();
+
+        // Administração de cofres (T-0403, T-0405)
+        services.AddScoped<CriarCofre>();
+        services.AddScoped<ListarCofres>();
+        services.AddScoped<ObterCofre>();
+        services.AddScoped<AtualizarCofre>();
+        services.AddScoped<DesativarCofre>();
+        services.AddScoped<ReativarCofre>();
+        services.AddScoped<ColocarCofreEmManutencao>();
+        services.AddScoped<RetirarCofreDaManutencao>();
 
         return services;
     }

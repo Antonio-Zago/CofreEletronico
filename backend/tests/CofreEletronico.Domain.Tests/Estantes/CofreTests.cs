@@ -248,14 +248,103 @@ public class CofreTests
     }
 
     [Fact]
-    public void Alterar_tamanho_valida_o_enum()
+    public void Atualizar_tamanho_valida_o_enum()
     {
         var cofre = Criar();
 
-        cofre.AlterarTamanho(TamanhoCofre.Grande);
+        cofre.Atualizar(cofre.Numero, cofre.CanalRele, TamanhoCofre.Grande);
         Assert.Equal(TamanhoCofre.Grande, cofre.Tamanho);
 
-        Assert.Throws<ExcecaoDominio>(() => cofre.AlterarTamanho((TamanhoCofre)99));
+        Assert.Throws<ExcecaoDominio>(() => cofre.Atualizar(cofre.Numero, cofre.CanalRele, (TamanhoCofre)99));
         Assert.Equal(TamanhoCofre.Grande, cofre.Tamanho);
+    }
+
+    // ---------- Atualizar (edição pelo admin, T-0403) ----------
+
+    [Theory]
+    [InlineData(StatusCofre.Livre, true)]
+    [InlineData(StatusCofre.Manutencao, true)]
+    [InlineData(StatusCofre.Reservado, false)]
+    [InlineData(StatusCofre.Ocupado, false)]
+    public void Atualizar_cobre_todos_os_status(StatusCofre status, bool permitido)
+    {
+        var cofre = EmStatus(status);
+
+        if (permitido)
+        {
+            cofre.Atualizar(7, 15, TamanhoCofre.Grande);
+
+            Assert.Equal(7, cofre.Numero);
+            Assert.Equal(15, cofre.CanalRele);
+            Assert.Equal(TamanhoCofre.Grande, cofre.Tamanho);
+        }
+        else
+        {
+            var erro = Assert.Throws<TransicaoCofreInvalidaException>(() => cofre.Atualizar(7, 15, TamanhoCofre.Grande));
+
+            Assert.Equal(nameof(Cofre.Atualizar), erro.Operacao);
+            Assert.Equal(status, erro.StatusAtual);
+            Assert.Equal(3, cofre.Numero);
+            Assert.Equal(2, cofre.CanalRele);
+            Assert.Equal(TamanhoCofre.Medio, cofre.Tamanho);
+        }
+
+        Assert.Equal(status, cofre.Status); // editar não muda o status
+        Assert.True(cofre.Ativo);
+    }
+
+    [Fact]
+    public void Atualizar_cofre_inativo_e_permitido_e_nao_reativa()
+    {
+        var cofre = Criar();
+        cofre.Desativar();
+
+        cofre.Atualizar(4, 1, TamanhoCofre.Pequeno);
+
+        Assert.Equal(4, cofre.Numero);
+        Assert.False(cofre.Ativo);
+    }
+
+    [Theory]
+    [InlineData(0, 0, TamanhoCofre.Pequeno)]
+    [InlineData(-1, 0, TamanhoCofre.Pequeno)]
+    [InlineData(1, -1, TamanhoCofre.Pequeno)]
+    [InlineData(1, 16, TamanhoCofre.Pequeno)]
+    [InlineData(1, 0, (TamanhoCofre)0)]
+    [InlineData(1, 0, (TamanhoCofre)99)]
+    public void Atualizar_com_dados_invalidos_lanca_e_nao_altera(int numero, int canal, TamanhoCofre tamanho)
+    {
+        var cofre = Criar();
+
+        var erro = Assert.Throws<ExcecaoDominio>(() => cofre.Atualizar(numero, canal, tamanho));
+
+        Assert.IsNotType<TransicaoCofreInvalidaException>(erro);
+        Assert.Equal(3, cofre.Numero);
+        Assert.Equal(2, cofre.CanalRele);
+        Assert.Equal(TamanhoCofre.Medio, cofre.Tamanho);
+    }
+
+    [Theory]
+    [InlineData(StatusCofre.Reservado)]
+    [InlineData(StatusCofre.Ocupado)]
+    public void Atualizar_com_dados_invalidos_em_status_bloqueado_lanca_validacao_primeiro(StatusCofre status)
+    {
+        var cofre = EmStatus(status);
+
+        var erro = Assert.Throws<ExcecaoDominio>(() => cofre.Atualizar(0, 0, TamanhoCofre.Pequeno));
+
+        Assert.IsNotType<TransicaoCofreInvalidaException>(erro);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(15)]
+    public void Atualizar_aceita_canais_nas_bordas(int canal)
+    {
+        var cofre = Criar();
+
+        cofre.Atualizar(1, canal, TamanhoCofre.Pequeno);
+
+        Assert.Equal(canal, cofre.CanalRele);
     }
 }

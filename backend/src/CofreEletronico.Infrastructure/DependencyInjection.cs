@@ -1,4 +1,5 @@
 using CofreEletronico.Application.Autenticacao.Portas;
+using CofreEletronico.Application.Cofres.Portas;
 using CofreEletronico.Application.Estantes.Portas;
 using CofreEletronico.Infrastructure.Autenticacao;
 using CofreEletronico.Infrastructure.Autorizacao;
@@ -88,6 +89,7 @@ public static class DependencyInjection
         // Sem estado: singleton. O repositório usa o DbContext da requisição: scoped.
         services.AddSingleton<IGeradorCredenciaisEstante, GeradorCredenciaisEstanteSeguro>();
         services.AddScoped<IEstanteRepositorio, EstanteRepositorio>();
+        services.AddScoped<ICofreRepositorio, CofreRepositorio>();
     }
 
     private static void AddAdminInicial(IServiceCollection services, IConfiguration configuration)

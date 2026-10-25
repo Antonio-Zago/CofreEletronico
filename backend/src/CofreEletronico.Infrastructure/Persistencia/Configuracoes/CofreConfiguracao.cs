@@ -6,10 +6,18 @@ namespace CofreEletronico.Infrastructure.Persistencia.Configuracoes;
 
 /// <summary>
 /// Tabela <c>cofres</c> (contrato em docs/ARQUITETURA.md). Enums como texto minúsculo com CHECK de valores.
-/// Sem token de concorrência por enquanto: a reserva (T-0702) define o controle de corrida.
+/// Token de concorrência: coluna de sistema <c>xmin</c> (shadow property <see cref="PropriedadeVersao"/>).
 /// </summary>
 internal sealed class CofreConfiguracao : IEntityTypeConfiguration<Cofre>
 {
+    /// <summary>Nome dos índices únicos (o repositório traduz o 23505 de cada um).</summary>
+    public const string IndiceNumero = "ix_cofres_estante_id_numero";
+
+    public const string IndiceCanalRele = "ix_cofres_estante_id_canal_rele";
+
+    /// <summary>Shadow property do token de concorrência (coluna de sistema <c>xmin</c>).</summary>
+    public const string PropriedadeVersao = "Versao";
+
     public void Configure(EntityTypeBuilder<Cofre> builder)
     {
         builder.ToTable("cofres", t =>
@@ -38,8 +46,18 @@ internal sealed class CofreConfiguracao : IEntityTypeConfiguration<Cofre>
         builder.Property(c => c.Ativo).IsRequired();
 
         // Os dois índices começam por estante_id, então também servem às buscas por estante e à FK.
-        builder.HasIndex(c => new { c.EstanteId, c.Numero }).IsUnique().HasDatabaseName("ix_cofres_estante_id_numero");
-        builder.HasIndex(c => new { c.EstanteId, c.CanalRele }).IsUnique().HasDatabaseName("ix_cofres_estante_id_canal_rele");
+        builder.HasIndex(c => new { c.EstanteId, c.Numero }).IsUnique().HasDatabaseName(IndiceNumero);
+        builder.HasIndex(c => new { c.EstanteId, c.CanalRele }).IsUnique().HasDatabaseName(IndiceCanalRele);
+
+        // Concorrência otimista pela coluna de sistema xmin (igual a estantes): duas alterações simultâneas do mesmo
+        // cofre não se sobrescrevem; a segunda recebe DbUpdateConcurrencyException (409 na Api). Um UPDATE condicional
+        // (ExecuteUpdate, ex.: reserva na T-0702) também muda o xmin, então a edição do admin que leu antes falha.
+        // xmin já existe em toda tabela: a migration não cria coluna.
+        builder.Property<uint>(PropriedadeVersao)
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
 
         // Exclusão é lógica: apagar fisicamente uma estante com cofres é bloqueado no banco.
         builder.HasOne<Estante>().WithMany()

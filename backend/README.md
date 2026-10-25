@@ -127,6 +127,15 @@ Proteções do grupo `/admin` (todas por administrador, pela claim `sub` do toke
 - Rate limit geral de 120 requisições/min (`RateLimit:Admin`) e, somadas entre `POST /admin/estantes` e `POST /admin/estantes/{id}/credenciais`, 10/min (`RateLimit:AdminSensivel`). Cada subseção tem `Limite` e `JanelaSegundos`. Ao exceder: 429 com `Retry-After`.
 - Concorrência otimista na tabela `estantes` (coluna de sistema `xmin`): se duas operações alteram a mesma estante ao mesmo tempo (por exemplo, duas regenerações), a segunda recebe 409 e nada é gravado. Na regeneração com 409, as credenciais não são devolvidas: recarregue e tente de novo.
 
+## Administração de cofres
+
+Rotas em `/admin/estantes/{estanteId}/cofres` (papel `Admin`; contrato em [../docs/ARQUITETURA.md](../docs/ARQUITETURA.md), "Contrato REST: administração", subseção "Cofres"): cadastro, listagem (ordenada por número, sem paginação), detalhe, edição, desativação/reativação (exclusão lógica) e manutenção (`/manutencao` e `/retirar-manutencao`).
+
+- Corpo de cadastro e edição: `{ "numero": 1, "canalRele": 0, "tamanho": "medio" }`. `numero` >= 1, `canalRele` de 0 a 15 e `tamanho` exatamente `pequeno`, `medio` ou `grande`. Na resposta, `tamanho` e `status` (`livre`, `reservado`, `ocupado`, `manutencao`) também vêm em texto.
+- Número e canal são únicos por estante (409 se já usados). É permitido cadastrar e editar cofres de estante desativada.
+- Editar e desativar só com o cofre `livre` ou em `manutencao`; colocar em manutenção só a partir de `livre`; retirar só a partir de `manutencao`. Fora disso: 409 com o status atual na mensagem.
+- Cofre de outra estante responde 404. Concorrência otimista na tabela `cofres` (`xmin`): alteração simultânea recebe 409 e nada é gravado.
+
 ## Erros inesperados
 
 Fora de Development, uma exceção não tratada devolve 500 em ProblemDetails com título e detalhe genéricos (`Erro interno`), sem mensagem nem stack trace. A exceção completa vai só para o log, correlacionada pelo `traceId` da resposta. Em Development aparece a página de exceção do desenvolvedor.

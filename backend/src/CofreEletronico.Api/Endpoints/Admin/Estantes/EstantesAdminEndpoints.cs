@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using CofreEletronico.Api.Autenticacao;
 using CofreEletronico.Application.Estantes;
-using CofreEletronico.Domain.Common;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CofreEletronico.Api.Endpoints.Admin.Estantes;
@@ -23,7 +22,7 @@ public static class EstantesAdminEndpoints
     public static RouteGroupBuilder MapEstantesAdmin(this RouteGroupBuilder grupoAdmin)
     {
         var grupo = grupoAdmin.MapGroup(Rota)
-            .AddEndpointFilter(TraduzirExcecaoDominioAsync);
+            .AddEndpointFilter(FiltroExcecaoDominio.Criar(typeof(EstantesAdminEndpoints)));
 
         grupo.MapPost("", CriarAsync)
             .WithName("CriarEstante")
@@ -164,29 +163,6 @@ public static class EstantesAdminEndpoints
     {
         contexto.Response.Headers.CacheControl = "no-store";
         contexto.Response.Headers.Pragma = "no-cache";
-    }
-
-    /// <summary>
-    /// Rede de segurança: regra de domínio violada que não foi traduzida pelo caso de uso vira 400 genérico,
-    /// sem a mensagem nem o stack trace.
-    /// </summary>
-    private static async ValueTask<object?> TraduzirExcecaoDominioAsync(EndpointFilterInvocationContext contexto, EndpointFilterDelegate proximo)
-    {
-        try
-        {
-            return await proximo(contexto);
-        }
-        catch (ExcecaoDominio)
-        {
-            contexto.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
-                .CreateLogger(typeof(EstantesAdminEndpoints).FullName!)
-                .LogWarning("Regra de domínio violada em {Rota} sem tradução no caso de uso.", contexto.HttpContext.Request.Path.Value);
-
-            return Results.Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Dados inválidos.",
-                detail: "A requisição não pôde ser processada.");
-        }
     }
 }
 

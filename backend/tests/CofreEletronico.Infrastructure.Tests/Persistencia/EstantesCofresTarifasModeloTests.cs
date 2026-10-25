@@ -69,7 +69,7 @@ public sealed class EstantesCofresTarifasModeloTests : IDisposable
     {
         var cofre = Entidade(typeof(Cofre));
 
-        Assert.Equal(["ativo", "canal_rele", "estante_id", "id", "numero", "status", "tamanho"], Colunas(cofre));
+        Assert.Equal(["ativo", "canal_rele", "estante_id", "id", "numero", "status", "tamanho", "xmin"], Colunas(cofre));
         Assert.Equal("integer", Tipo(cofre, nameof(Cofre.Numero)));
         Assert.Equal("integer", Tipo(cofre, nameof(Cofre.CanalRele)));
         Assert.Equal("character varying(20)", Tipo(cofre, nameof(Cofre.Tamanho)));
@@ -180,11 +180,13 @@ public sealed class EstantesCofresTarifasModeloTests : IDisposable
         Assert.Throws<InvalidOperationException>(() => conversor.ConvertFromProvider("quebrado"));
     }
 
-    [Fact]
-    public void Estantes_usam_xmin_como_token_de_concorrencia()
+    [Theory]
+    [InlineData(typeof(Estante))]
+    [InlineData(typeof(Cofre))] // T-0403
+    public void Usam_xmin_como_token_de_concorrencia(Type tipo)
     {
-        var estante = Entidade(typeof(Estante));
-        var versao = Assert.Single(estante.GetProperties(), p => p.IsConcurrencyToken);
+        var entidade = Entidade(tipo);
+        var versao = Assert.Single(entidade.GetProperties(), p => p.IsConcurrencyToken);
 
         Assert.Equal("Versao", versao.Name);
         Assert.True(versao.IsShadowProperty());
@@ -195,10 +197,9 @@ public sealed class EstantesCofresTarifasModeloTests : IDisposable
     }
 
     [Fact]
-    public void Cofres_ainda_nao_tem_token_de_concorrencia()
+    public void Tarifas_nao_tem_token_de_concorrencia()
     {
-        // A reserva (T-0702) decide o controle de concorrência.
-        Assert.DoesNotContain(Entidade(typeof(Cofre)).GetProperties(), p => p.IsConcurrencyToken);
+        Assert.DoesNotContain(Entidade(typeof(Tarifa)).GetProperties(), p => p.IsConcurrencyToken);
     }
 
     private IEntityType Entidade(Type tipo) =>

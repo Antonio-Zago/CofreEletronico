@@ -115,6 +115,12 @@ namespace CofreEletronico.Infrastructure.Persistencia.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("tamanho");
 
+                    b.Property<uint>("Versao")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id")
                         .HasName("pk_cofres");
 

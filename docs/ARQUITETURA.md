@@ -151,6 +151,37 @@ Objeto `credenciais` (exibido uma única vez):
 
 Geração do `deviceId`: aleatório, formato `est-` + 6 caracteres `[a-z0-9]`, com nova tentativa em caso de colisão.
 
+### Cofres
+
+Base `/admin/estantes/{estanteId}/cofres`. Na tabela, `...` abrevia essa base.
+
+| Método e rota | Corpo | Sucesso | Erros |
+|---|---|---|---|
+| `POST /admin/estantes/{estanteId}/cofres` | `{ numero, canalRele, tamanho }` | 201 cofre (status `livre`, ativo), com `Location: /admin/estantes/{estanteId}/cofres/{id}` | 400; 404 estante inexistente; 409 número ou canal já usado na estante |
+| `GET /admin/estantes/{estanteId}/cofres` | — | 200 `[cofre]`, ordenado por número, sem paginação (no máximo 16 por estante) | 404 estante inexistente |
+| `GET /admin/estantes/{estanteId}/cofres/{cofreId}` | — | 200 cofre | 404 (também se o cofre não pertencer à estante) |
+| `PUT /admin/estantes/{estanteId}/cofres/{cofreId}` | `{ numero, canalRele, tamanho }` | 200 cofre | 400; 404; 409 se o cofre estiver `reservado` ou `ocupado`, se o número ou o canal já estiver em uso na estante, ou em concorrência |
+| `POST .../{cofreId}/desativar` | — | 200 cofre (idempotente) | 404; 409 se `reservado` ou `ocupado`, ou em concorrência |
+| `POST .../{cofreId}/reativar` | — | 200 cofre (idempotente) | 404; 409 concorrência |
+| `POST .../{cofreId}/manutencao` | — | 200 cofre com status `manutencao` | 404; 409 se não estiver `livre` (transição inválida) ou em concorrência |
+| `POST .../{cofreId}/retirar-manutencao` | — | 200 cofre com status `livre` | 404; 409 se não estiver em `manutencao`, ou em concorrência |
+
+Objeto cofre:
+
+```json
+{ "id": "guid", "estanteId": "guid", "numero": 1, "canalRele": 0, "tamanho": "medio", "status": "livre", "ativo": true }
+```
+
+- `tamanho`: `pequeno` / `medio` / `grande`.
+- `status`: `livre` / `reservado` / `ocupado` / `manutencao`.
+
+Regras:
+- `canalRele` de 0 a 15 e `numero` > 0, ambos únicos na estante.
+- Edição (PUT) só com o cofre `livre` ou em `manutencao`. Trocar o canal com locação em andamento faria o comando acionar outro relé.
+- É permitido cadastrar e editar cofres de estante desativada (para preparar ou reconfigurar), mas ela continua fora das buscas.
+- Um cofre inativo não pode ser reservado.
+- Controle de concorrência otimista em `cofres`: alterações simultâneas devolvem 409.
+
 ## Modelo de dados (evolução do DER.drawio)
 
 | Tabela | Campos principais | Observação |

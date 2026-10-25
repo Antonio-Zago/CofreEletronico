@@ -1,0 +1,840 @@
+{
+  "info": {
+    "name": "Cofre Eletrônico API - Administração",
+    "description": "Endpoints de administração até a T-0402: /admin/estantes.\n\nAntes de usar:\n1. Configure no backend os user-secrets: ConnectionStrings:Cofre, Jwt:ChaveAssinatura, Criptografia:ChaveSegredos e o admin inicial (AdminInicial:Email / AdminInicial:Senha) — ver backend/README.md.\n2. Suba a Api com o perfil `http` (http://localhost:5146). Ajuste `baseUrl` se usar outro perfil.\n3. Preencha as variáveis da collection `adminEmail` e `adminSenha` com o e-mail e a senha do admin inicial (aba Variables da collection). Elas ficam só no seu Postman — não compartilhe a collection exportada com esses valores preenchidos.\n\nOrdem: rode as pastas de cima para baixo (ou a collection inteira no Runner). Os scripts guardam tokens, ids e credenciais nas variáveis da collection.\n\nCredenciais: o segredo HMAC e a senha MQTT aparecem só na criação e na regeneração. Os scripts mostram esses valores no Postman Console (View > Show Postman Console) para você poder testar o provisionamento; em ambiente real, guarde-os em local seguro e limpe o console.\n\nLimites: login+registro somam 10/min por IP; criar estante + regenerar credenciais somam 10/min por admin. As pastas 0 a 2 ficam abaixo dos dois limites; se rodar várias vezes seguidas, espere 1 minuto.\n\nNão coberto aqui: 409 de desativar com cofre reservado/ocupado (depende das rotas de cofres e de locação) e 409 de concorrência (exige duas requisições simultâneas).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5146"
+    },
+    {
+      "key": "adminEmail",
+      "value": ""
+    },
+    {
+      "key": "adminSenha",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "usuarioEmail",
+      "value": ""
+    },
+    {
+      "key": "usuarioSenha",
+      "value": "Senha1234"
+    },
+    {
+      "key": "usuarioToken",
+      "value": ""
+    },
+    {
+      "key": "estanteId",
+      "value": ""
+    },
+    {
+      "key": "deviceId",
+      "value": ""
+    },
+    {
+      "key": "segredoHmac",
+      "value": ""
+    },
+    {
+      "key": "senhaMqtt",
+      "value": ""
+    },
+    {
+      "key": "nomeEstante",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0 - Preparação",
+      "item": [
+        {
+          "name": "Login do admin (200, papel Admin)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('adminEmail') || !pm.variables.get('adminSenha')) {",
+                  "    throw new Error('Preencha adminEmail e adminSenha (coluna Current value nas Variables da collection ou no Environment selecionado).');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 com tokens', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.collectionVariables.set('adminToken', pm.response.json().accessToken);",
+                  "});",
+                  "",
+                  "pm.test('JWT tem o papel Admin', () => {",
+                  "    const token = pm.collectionVariables.get('adminToken');",
+                  "    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    const papeis = [].concat(payload.role || []);",
+                  "    pm.expect(papeis).to.include('Admin');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"senha\": \"{{adminSenha}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Se falhar com 401, confira se o admin inicial foi criado (log da Api na subida) e se as variáveis adminEmail/adminSenha estão corretas."
+          }
+        },
+        {
+          "name": "Registro de usuário comum (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('usuarioEmail', `comum.${Date.now()}@cofre.local`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 com tokens', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.collectionVariables.set('usuarioToken', pm.response.json().accessToken);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Usuário Comum\",\n  \"email\": \"{{usuarioEmail}}\",\n  \"senha\": \"{{usuarioSenha}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/registro",
+            "description": "Usuário sem papel Admin, usado para conferir o 403 nas rotas /admin."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 - Estantes: fluxo principal",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "POST /admin/estantes (201 + credenciais)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('nomeEstante', `Estante de Teste ${Date.now()}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('201 com Location', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.headers.get('Location')).to.include('/admin/estantes/' + body.id);",
+                  "});",
+                  "",
+                  "pm.test('Cache-Control: no-store', () => {",
+                  "    pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store');",
+                  "});",
+                  "",
+                  "pm.test('estante no formato do contrato', () => {",
+                  "    pm.expect(body).to.include.keys('id', 'nome', 'endereco', 'latitude', 'longitude', 'deviceId', 'online', 'ultimoHeartbeat', 'ativa', 'criadoEm', 'credenciais');",
+                  "    pm.expect(body.ativa).to.eql(true);",
+                  "    pm.expect(body.online).to.eql(false);",
+                  "    pm.expect(body.deviceId).to.match(/^est-[a-z0-9]{6}$/);",
+                  "});",
+                  "",
+                  "pm.test('credenciais válidas', () => {",
+                  "    const c = body.credenciais;",
+                  "    pm.expect(c.deviceId).to.eql(body.deviceId);",
+                  "    pm.expect(c.usuarioMqtt).to.eql(body.deviceId);",
+                  "    pm.expect(c.segredoHmac).to.match(/^[0-9a-f]{64}$/);",
+                  "    pm.expect(c.senhaMqtt).to.match(/^[A-Za-z0-9]{24}$/);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('estanteId', body.id);",
+                  "pm.collectionVariables.set('deviceId', body.deviceId);",
+                  "pm.collectionVariables.set('segredoHmac', body.credenciais.segredoHmac);",
+                  "pm.collectionVariables.set('senhaMqtt', body.credenciais.senhaMqtt);",
+                  "console.log('Credenciais da estante (exibidas uma única vez):', body.credenciais);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"{{nomeEstante}}\",\n  \"endereco\": \"Av. Brasil, 1000 - Centro\",\n  \"latitude\": -23.5505,\n  \"longitude\": -46.6333\n}"
+            },
+            "url": "{{baseUrl}}/admin/estantes",
+            "description": "Cria a estante e devolve as credenciais (deviceId, segredo HMAC em hex, usuário e senha MQTT) UMA ÚNICA VEZ. Para provisionar de verdade: infra/mosquitto/criar-usuario.sh <deviceId> (colando a senha no prompt), docker compose kill -s HUP mosquitto e gravar no ESP32."
+          }
+        },
+        {
+          "name": "GET /admin/estantes/{id} (200, sem segredo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 com a estante criada', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.id).to.eql(pm.collectionVariables.get('estanteId'));",
+                  "    pm.expect(body.deviceId).to.eql(pm.collectionVariables.get('deviceId'));",
+                  "});",
+                  "",
+                  "pm.test('não expõe segredo nem senha MQTT', () => {",
+                  "    const texto = pm.response.text();",
+                  "    pm.expect(texto).to.not.include('credenciais');",
+                  "    pm.expect(texto).to.not.include('segredoHmac');",
+                  "    pm.expect(texto).to.not.include('senhaMqtt');",
+                  "    pm.expect(texto).to.not.include(pm.collectionVariables.get('segredoHmac'));",
+                  "    pm.expect(texto).to.not.include(pm.collectionVariables.get('senhaMqtt'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/estantes/{{estanteId}}"
+          }
+        },
+        {
+          "name": "GET /admin/estantes (200, paginado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 com envelope de paginação', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.include.keys('itens', 'pagina', 'tamanhoPagina', 'total');",
+                  "    pm.expect(body.pagina).to.eql(1);",
+                  "    pm.expect(body.tamanhoPagina).to.eql(100);",
+                  "    pm.expect(body.total).to.be.at.least(1);",
+                  "});",
+                  "",
+                  "pm.test('contém a estante criada', () => {",
+                  "    const ids = pm.response.json().itens.map(e => e.id);",
+                  "    pm.expect(ids).to.include(pm.collectionVariables.get('estanteId'));",
+                  "});",
+                  "",
+                  "pm.test('nenhum item expõe credenciais', () => {",
+                  "    pm.expect(pm.response.text()).to.not.include('segredoHmac');",
+                  "    pm.expect(pm.response.text()).to.not.include('senhaMqtt');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/estantes?pagina=1&tamanhoPagina=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "estantes"
+              ],
+              "query": [
+                {
+                  "key": "pagina",
+                  "value": "1"
+                },
+                {
+                  "key": "tamanhoPagina",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Lista ordenada por nome. Use ?ativa=true ou ?ativa=false para filtrar; sem o filtro lista todas. tamanhoPagina: 1 a 100 (padrão 20)."
+          }
+        },
+        {
+          "name": "PUT /admin/estantes/{id} (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 com os dados alterados', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.nome).to.eql(pm.collectionVariables.get('nomeEstante') + ' (editada)');",
+                  "    pm.expect(body.endereco).to.eql('Rua Nova, 200 - Bairro Novo');",
+                  "    pm.expect(body.latitude).to.eql(-22.9068);",
+                  "    pm.expect(body.longitude).to.eql(-43.1729);",
+                  "});",
+                  "",
+                  "pm.test('deviceId não muda na edição', () => {",
+                  "    pm.expect(pm.response.json().deviceId).to.eql(pm.collectionVariables.get('deviceId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"{{nomeEstante}} (editada)\",\n  \"endereco\": \"Rua Nova, 200 - Bairro Novo\",\n  \"latitude\": -22.9068,\n  \"longitude\": -43.1729\n}"
+            },
+            "url": "{{baseUrl}}/admin/estantes/{{estanteId}}"
+          }
+        },
+        {
+          "name": "POST /admin/estantes/{id}/desativar (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 com ativa = false', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().ativa).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/admin/estantes/{{estanteId}}/desativar",
+            "description": "Exclusão lógica. Daria 409 se algum cofre da estante estivesse reservado ou ocupado (ainda não testável: depende das rotas de cofres e de locação)."
+          }
+        },
+        {
+          "name": "Desativar de novo (200, idempotente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 e continua inativa', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().ativa).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/admin/estantes/{{estanteId}}/desativar"
+          }
+        },
+        {
+          "name": "GET /admin/estantes?ativa=false (contém a desativada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 e só estantes inativas', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    const itens = pm.response.json().itens;",
+                  "    pm.expect(itens.every(e => e.ativa === false)).to.eql(true);",
+                  "    pm.expect(itens.map(e => e.id)).to.include(pm.collectionVariables.get('estanteId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/estantes?ativa=false&tamanhoPagina=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "estantes"
+              ],
+              "query": [
+                {
+                  "key": "ativa",
+                  "value": "false"
+                },
+                {
+                  "key": "tamanhoPagina",
+                  "value": "100"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /admin/estantes/{id}/reativar (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 com ativa = true', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().ativa).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/admin/estantes/{{estanteId}}/reativar"
+          }
+        },
+        {
+          "name": "POST /admin/estantes/{id}/credenciais (200, novas credenciais)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const c = pm.response.json();",
+                  "",
+                  "pm.test('200 com Cache-Control: no-store', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store');",
+                  "});",
+                  "",
+                  "pm.test('deviceId mantido, segredo e senha novos', () => {",
+                  "    pm.expect(c.deviceId).to.eql(pm.collectionVariables.get('deviceId'));",
+                  "    pm.expect(c.usuarioMqtt).to.eql(c.deviceId);",
+                  "    pm.expect(c.segredoHmac).to.match(/^[0-9a-f]{64}$/);",
+                  "    pm.expect(c.senhaMqtt).to.match(/^[A-Za-z0-9]{24}$/);",
+                  "    pm.expect(c.segredoHmac).to.not.eql(pm.collectionVariables.get('segredoHmac'));",
+                  "    pm.expect(c.senhaMqtt).to.not.eql(pm.collectionVariables.get('senhaMqtt'));",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('segredoHmac', c.segredoHmac);",
+                  "pm.collectionVariables.set('senhaMqtt', c.senhaMqtt);",
+                  "console.log('Novas credenciais (exibidas uma única vez):', c);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/admin/estantes/{{estanteId}}/credenciais",
+            "description": "O backend passa a assinar com o novo segredo na hora. A revogação só fica completa depois de trocar a senha no Mosquitto (criar-usuario.sh + HUP) e regravar o ESP32."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Estantes: erros esperados",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Sem token (401 ProblemDetails)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 em ProblemDetails com WWW-Authenticate', () => {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "    pm.expect(pm.response.headers.get('WWW-Authenticate')).to.include('Bearer');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/estantes"
+          }
+        },
+        {
+          "name": "Token de usuário comum (403 ProblemDetails)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 em ProblemDetails', () => {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{usuarioToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/estantes",
+            "description": "Usuário autenticado mas sem papel Admin."
+          }
+        },
+        {
+          "name": "Token de usuário comum tentando criar (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{usuarioToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Não deve ser criada\",\n  \"endereco\": \"Rua X, 1\",\n  \"latitude\": 0,\n  \"longitude\": 0\n}"
+            },
+            "url": "{{baseUrl}}/admin/estantes"
+          }
+        },
+        {
+          "name": "Criar com dados inválidos (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 com erros de validação', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    console.log('Erros de validação:', pm.response.json());",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"\",\n  \"endereco\": \"\",\n  \"latitude\": 200,\n  \"longitude\": -500\n}"
+            },
+            "url": "{{baseUrl}}/admin/estantes",
+            "description": "Nome e endereço vazios, latitude fora de -90..90 e longitude fora de -180..180. Conta no limite sensível (criar + credenciais)."
+          }
+        },
+        {
+          "name": "Obter estante inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/estantes/00000000-0000-0000-0000-000000000001"
+          }
+        },
+        {
+          "name": "Obter com id que não é GUID (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 (a rota só aceita GUID)', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/estantes/abc"
+          }
+        },
+        {
+          "name": "Atualizar estante inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Qualquer\",\n  \"endereco\": \"Rua Y, 2\",\n  \"latitude\": 0,\n  \"longitude\": 0\n}"
+            },
+            "url": "{{baseUrl}}/admin/estantes/00000000-0000-0000-0000-000000000001"
+          }
+        },
+        {
+          "name": "Listar com tamanhoPagina acima do máximo (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/estantes?tamanhoPagina=500",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "estantes"
+              ],
+              "query": [
+                {
+                  "key": "tamanhoPagina",
+                  "value": "500"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar com página inválida (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/estantes?pagina=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "estantes"
+              ],
+              "query": [
+                {
+                  "key": "pagina",
+                  "value": "abc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Rota /admin inexistente sem token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 (fallback exige login antes de revelar se a rota existe)', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/nao-existe"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Manuais (não rodar no Runner)",
+      "description": "Testes que exigem repetição. Rode isoladamente.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Rate limit sensível: regenerar credenciais repetidamente (429)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 429) {",
+                  "    pm.test('429 com Retry-After', () => pm.response.to.have.header('Retry-After'));",
+                  "    console.log('Retry-After (s):', pm.response.headers.get('Retry-After'));",
+                  "} else {",
+                  "    pm.test('ainda dentro do limite (200)', () => pm.response.to.have.status(200));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/admin/estantes/{{estanteId}}/credenciais",
+            "description": "Criar estante + regenerar credenciais somam 10/min por admin. Clique em Send até receber 429 (ou rode só esta requisição no Runner com 12 iterações). Atenção: cada 200 troca as credenciais da estante de teste. As demais rotas /admin continuam funcionando (limite geral: 120/min por admin)."
+          }
+        }
+      ]
+    }
+  ]
+}

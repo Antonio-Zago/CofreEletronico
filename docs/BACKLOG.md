@@ -109,9 +109,9 @@ Critérios de aceite:
 |---|---|---|---|---|---|---|
 | T-0401 | Entidades Estante, Cofre, Tarifa + migrations | Backend | P1 | 2 | 2 | Concluído |
 | T-0402 | CRUD /admin/estantes (gera device_id, credenciais MQTT e segredo HMAC) | Backend | P1 | 2 | 3 | Concluído |
-| T-0403 | CRUD /admin/estantes/{id}/cofres (número, canal do relé, tamanho) | Backend | P1 | 2 | 2 | A fazer |
+| T-0403 | CRUD /admin/estantes/{id}/cofres (número, canal do relé, tamanho) | Backend | P1 | 2 | 2 | Concluído |
 | T-0404 | CRUD /admin/tarifas (valor por hora, tempo mínimo por tamanho) | Backend | P1 | 2 | 2 | A fazer |
-| T-0405 | Colocar cofre em manutenção / reativar | Backend | P2 | 2 | 1 | A fazer |
+| T-0405 | Colocar cofre em manutenção / reativar | Backend | P2 | 2 | 1 | Concluído |
 | T-0406 | Políticas de autorização: rotas /admin apenas para Admin | Backend | P1 | 2 | 1 | Concluído |
 
 ### US-05 · P1

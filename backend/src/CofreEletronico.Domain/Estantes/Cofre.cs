@@ -17,6 +17,8 @@ namespace CofreEletronico.Domain.Estantes;
 /// Livre      --ColocarEmManutencao--> Manutencao
 /// Manutencao --RetirarDaManutencao--> Livre
 /// </code>
+/// Editar (<see cref="Atualizar"/>) e desativar (<see cref="Desativar"/>) só valem sem locação em andamento
+/// (Livre ou Manutencao) e não mudam o status.
 /// Decisão: Reservado e Ocupado NÃO vão direto para Manutencao. Nesses estados há uma locação em
 /// andamento (Pix pendente ou itens do usuário dentro do cofre); tirar o cofre de serviço sem encerrar
 /// ou cancelar a locação deixaria a locação apontando para um cofre indisponível e bloquearia a abertura
@@ -60,18 +62,35 @@ public sealed class Cofre : Entity
 
     public bool Ativo { get; private set; }
 
+    /// <summary>Livre ou Manutencao: nenhuma locação (Pix pendente ou itens dentro) depende do cofre.</summary>
+    private bool SemLocacaoEmAndamento => Status is StatusCofre.Livre or StatusCofre.Manutencao;
+
     /// <summary>Cria um cofre Livre e ativo. A unicidade de número e canal na estante é garantida no banco.</summary>
     public static Cofre Criar(Guid estanteId, int numero, int canalRele, TamanhoCofre tamanho)
     {
         if (estanteId == Guid.Empty)
             throw new ExcecaoDominio("A estante do cofre é obrigatória.");
-        if (numero <= 0)
-            throw new ExcecaoDominio("O número do cofre deve ser maior que zero.");
-        if (canalRele < CanalMinimo || canalRele > CanalMaximo)
-            throw new ExcecaoDominio($"O canal do relé deve estar entre {CanalMinimo} e {CanalMaximo}.");
-        ValidarTamanho(tamanho);
+        ValidarDados(numero, canalRele, tamanho);
 
         return new Cofre(Guid.NewGuid(), estanteId, numero, canalRele, tamanho);
+    }
+
+    /// <summary>
+    /// Edição pelo admin (número, canal do relé e tamanho), com a mesma validação da criação (<see cref="ExcecaoDominio"/>).
+    /// Só sem locação em andamento (Livre ou Manutencao): em Reservado/Ocupado lança
+    /// <see cref="TransicaoCofreInvalidaException"/>. Valida tudo antes de alterar: se lançar, o cofre continua como
+    /// estava. Status e <see cref="Ativo"/> não mudam. A unicidade de número e canal na estante é conferida pelo caso de
+    /// uso e garantida no banco.
+    /// </summary>
+    public void Atualizar(int numero, int canalRele, TamanhoCofre tamanho)
+    {
+        ValidarDados(numero, canalRele, tamanho);
+        if (!SemLocacaoEmAndamento)
+            throw new TransicaoCofreInvalidaException(nameof(Atualizar), Status);
+
+        Numero = numero;
+        CanalRele = canalRele;
+        Tamanho = tamanho;
     }
 
     /// <summary>Livre → Reservado. Cofre inativo (excluído logicamente) não pode ser reservado.</summary>
@@ -100,18 +119,12 @@ public sealed class Cofre : Entity
     public void RetirarDaManutencao() =>
         Transitar(nameof(RetirarDaManutencao), StatusCofre.Manutencao, StatusCofre.Livre);
 
-    public void AlterarTamanho(TamanhoCofre tamanho)
-    {
-        ValidarTamanho(tamanho);
-        Tamanho = tamanho;
-    }
-
     /// <summary>
     /// Exclusão lógica. Só sem locação em andamento (Livre ou Manutencao). Idempotente para cofre já inativo.
     /// </summary>
     public void Desativar()
     {
-        if (Status is not (StatusCofre.Livre or StatusCofre.Manutencao))
+        if (!SemLocacaoEmAndamento)
             throw new TransicaoCofreInvalidaException(nameof(Desativar), Status);
 
         Ativo = false;
@@ -126,6 +139,15 @@ public sealed class Cofre : Entity
             throw new TransicaoCofreInvalidaException(operacao, Status);
 
         Status = destino;
+    }
+
+    private static void ValidarDados(int numero, int canalRele, TamanhoCofre tamanho)
+    {
+        if (numero <= 0)
+            throw new ExcecaoDominio("O número do cofre deve ser maior que zero.");
+        if (canalRele < CanalMinimo || canalRele > CanalMaximo)
+            throw new ExcecaoDominio($"O canal do relé deve estar entre {CanalMinimo} e {CanalMaximo}.");
+        ValidarTamanho(tamanho);
     }
 
     private static void ValidarTamanho(TamanhoCofre tamanho)

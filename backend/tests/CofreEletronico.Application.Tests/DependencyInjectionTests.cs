@@ -1,6 +1,9 @@
 using CofreEletronico.Application.Autenticacao;
 using CofreEletronico.Application.Autenticacao.Portas;
 using CofreEletronico.Application.Autorizacao;
+using CofreEletronico.Application.Cofres;
+using CofreEletronico.Application.Cofres.Portas;
+using CofreEletronico.Application.Tests.Cofres;
 using CofreEletronico.Application.Estantes;
 using CofreEletronico.Application.Estantes.Portas;
 using CofreEletronico.Application.Tests.Autenticacao;
@@ -26,6 +29,7 @@ public class DependencyInjectionTests
         services.AddSingleton<IRefreshTokenRepositorio, RefreshTokenRepositorioFalso>();
         services.AddSingleton<IEstanteRepositorio, EstanteRepositorioFalso>();
         services.AddSingleton<IGeradorCredenciaisEstante, GeradorCredenciaisFalso>();
+        services.AddSingleton<ICofreRepositorio, CofreRepositorioFalso>();
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
         using var scope = provider.CreateScope();
@@ -42,5 +46,13 @@ public class DependencyInjectionTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<DesativarEstante>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReativarEstante>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RegenerarCredenciaisEstante>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CriarCofre>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ListarCofres>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ObterCofre>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<AtualizarCofre>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<DesativarCofre>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReativarCofre>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ColocarCofreEmManutencao>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RetirarCofreDaManutencao>());
     }
 }
