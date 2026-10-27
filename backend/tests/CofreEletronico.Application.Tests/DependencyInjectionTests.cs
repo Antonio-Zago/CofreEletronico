@@ -3,6 +3,10 @@ using CofreEletronico.Application.Autenticacao.Portas;
 using CofreEletronico.Application.Autorizacao;
 using CofreEletronico.Application.Cofres;
 using CofreEletronico.Application.Cofres.Portas;
+using CofreEletronico.Application.Comandos;
+using CofreEletronico.Application.Comandos.Portas;
+using CofreEletronico.Application.Mqtt.Portas;
+using CofreEletronico.Application.Tests.Comandos;
 using CofreEletronico.Application.Tests.Cofres;
 using CofreEletronico.Application.Estantes;
 using CofreEletronico.Application.Estantes.Portas;
@@ -30,6 +34,8 @@ public class DependencyInjectionTests
         services.AddSingleton<IEstanteRepositorio, EstanteRepositorioFalso>();
         services.AddSingleton<IGeradorCredenciaisEstante, GeradorCredenciaisFalso>();
         services.AddSingleton<ICofreRepositorio, CofreRepositorioFalso>();
+        services.AddSingleton<IDadosComandoRepositorio, DadosComandoRepositorioFalso>();
+        services.AddSingleton<IClienteMqtt, ClienteMqttFalso>();
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
         using var scope = provider.CreateScope();
@@ -54,5 +60,6 @@ public class DependencyInjectionTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReativarCofre>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ColocarCofreEmManutencao>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RetirarCofreDaManutencao>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<EnviarComandoAbertura>());
     }
 }

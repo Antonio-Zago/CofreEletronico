@@ -18,14 +18,11 @@ public sealed partial class Estante : Entity
     /// <summary>Tamanho fixo do device_id: <c>est-</c> + 6 caracteres.</summary>
     public const int DeviceIdTamanho = 10;
 
-    /// <summary>Mínimo do segredo HMAC-SHA256, em bytes.</summary>
-    public const int SegredoHmacTamanhoMinimoBytes = 32;
-
     /// <summary>
-    /// Máximo do segredo HMAC-SHA256, em bytes (tamanho do bloco do SHA-256; chaves maiores
-    /// seriam reduzidas por hash pelo HMAC, sem ganho de segurança).
+    /// Tamanho exato do segredo HMAC-SHA256, em bytes (contrato: "os 32 bytes do segredo da estante"; o firmware usa
+    /// exatamente esses 32 bytes como chave).
     /// </summary>
-    public const int SegredoHmacTamanhoMaximoBytes = 64;
+    public const int SegredoHmacTamanhoBytes = 32;
 
     /// <summary>Padrão do device_id (contrato). Usa <c>\A</c> e <c>\z</c> para não aceitar quebra de linha no fim.</summary>
     public const string DeviceIdPadrao = @"\Aest-[a-z0-9]{6}\z";
@@ -167,13 +164,8 @@ public sealed partial class Estante : Entity
 
     private static void ValidarSegredoHmac(byte[]? segredoHmac)
     {
-        if (segredoHmac is null ||
-            segredoHmac.Length < SegredoHmacTamanhoMinimoBytes ||
-            segredoHmac.Length > SegredoHmacTamanhoMaximoBytes)
-        {
-            throw new ExcecaoDominio(
-                $"O segredo HMAC deve ter entre {SegredoHmacTamanhoMinimoBytes} e {SegredoHmacTamanhoMaximoBytes} bytes.");
-        }
+        if (segredoHmac is null || segredoHmac.Length != SegredoHmacTamanhoBytes)
+            throw new ExcecaoDominio($"O segredo HMAC deve ter exatamente {SegredoHmacTamanhoBytes} bytes.");
     }
 
     private static void ValidarCoordenadas(double latitude, double longitude)

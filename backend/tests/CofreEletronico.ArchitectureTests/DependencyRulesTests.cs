@@ -18,6 +18,7 @@ public class DependencyRulesTests
     private static readonly Assembly DomainAssembly = typeof(Entity).Assembly;
     private static readonly Assembly ApplicationAssembly = typeof(Application.DependencyInjection).Assembly;
     private static readonly Assembly InfrastructureAssembly = typeof(Infrastructure.DependencyInjection).Assembly;
+    private static readonly Assembly ApiAssembly = typeof(Program).Assembly;
 
     [Fact]
     public void Domain_nao_depende_de_outras_camadas()
@@ -65,6 +66,23 @@ public class DependencyRulesTests
     {
         // A Application só conhece a porta IClienteMqtt; o MQTTnet fica atrás do adaptador da Infrastructure.
         AssertSemDependencia(ApplicationAssembly, "MQTTnet");
+    }
+
+    [Fact]
+    public void Api_nao_usa_EnviarComandoAbertura_diretamente()
+    {
+        // EnviarComandoAbertura não aplica autorização nem regras de status: os endpoints usam os casos de uso com
+        // autorização (AbrirCofreLocacao, T-0801; AbrirCofreEmergencia, T-1103), que o chamam por dentro.
+        var tipo = typeof(Application.Comandos.EnviarComandoAbertura).FullName!;
+
+        // Controle positivo: a regra enxerga a dependência onde ela existe (registro de DI da Application).
+        var controle = Types.InAssembly(ApplicationAssembly)
+            .That().HaveName(nameof(Application.DependencyInjection))
+            .Should().HaveDependencyOn(tipo)
+            .GetResult();
+        Assert.True(controle.IsSuccessful, "O controle positivo da regra falhou: a verificação não detecta a dependência.");
+
+        AssertSemDependencia(ApiAssembly, tipo);
     }
 
     [Fact]

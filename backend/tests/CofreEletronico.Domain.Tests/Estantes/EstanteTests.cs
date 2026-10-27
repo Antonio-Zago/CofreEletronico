@@ -161,17 +161,22 @@ public class EstanteTests
     }
 
     [Fact]
-    public void Segredo_com_64_bytes_e_aceito()
+    public void Segredo_com_32_bytes_e_aceito()
     {
-        Assert.Equal(64, Criar(segredo: new byte[64]).ObterSegredoHmac().Length);
+        Assert.Equal(32, Criar(segredo: new byte[32]).ObterSegredoHmac().Length);
     }
 
-    [Fact]
-    public void Segredo_com_mais_de_64_bytes_falha()
+    [Theory]
+    [InlineData(33)]
+    [InlineData(48)]
+    [InlineData(64)]
+    [InlineData(65)]
+    public void Segredo_com_mais_de_32_bytes_falha(int tamanho)
     {
-        var erro = Assert.Throws<ExcecaoDominio>(() => Criar(segredo: new byte[65]));
+        // Contrato: a chave HMAC são exatamente os 32 bytes do segredo da estante.
+        var erro = Assert.Throws<ExcecaoDominio>(() => Criar(segredo: new byte[tamanho]));
 
-        Assert.Contains("entre 32 e 64 bytes", erro.Message);
+        Assert.Contains("exatamente 32 bytes", erro.Message);
     }
 
     [Fact]
@@ -269,14 +274,11 @@ public class EstanteTests
 
     // ---------- SubstituirSegredoHmac (T-0402) ----------
 
-    [Theory]
-    [InlineData(32)]
-    [InlineData(48)]
-    [InlineData(64)]
-    public void SubstituirSegredoHmac_troca_o_segredo_e_mantem_o_device_id(int tamanho)
+    [Fact]
+    public void SubstituirSegredoHmac_troca_o_segredo_e_mantem_o_device_id()
     {
         var estante = Criar();
-        var novo = Enumerable.Range(100, tamanho).Select(i => (byte)i).ToArray();
+        var novo = Enumerable.Range(100, 32).Select(i => (byte)i).ToArray();
 
         estante.SubstituirSegredoHmac(novo);
 
@@ -301,6 +303,8 @@ public class EstanteTests
     [InlineData(0)]
     [InlineData(16)]
     [InlineData(31)]
+    [InlineData(33)]
+    [InlineData(64)]
     [InlineData(65)]
     public void SubstituirSegredoHmac_com_tamanho_invalido_lanca_e_mantem_o_anterior(int tamanho)
     {

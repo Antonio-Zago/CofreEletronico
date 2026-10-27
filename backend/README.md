@@ -273,6 +273,17 @@ Opções inválidas (porta fora da faixa, keepalive acima de 120, `Host` sem `Se
 
 **TLS (T-0608):** hoje o listener do broker é 1883 sem TLS. Quando o listener 8883 for habilitado, use `Mqtt:UsarTls = true`, `Mqtt:Porta = 8883` e, se o certificado do broker for emitido por CA própria, `Mqtt:CaminhoCertificadoCa` com o certificado da CA. Nesse caso, só as raízes do arquivo são âncoras de confiança (o repositório do sistema é ignorado); intermediários vêm do arquivo e da cadeia enviada pelo broker; sem o arquivo, vale o repositório de confiança do sistema. O nome em `Mqtt:Host` precisa constar no certificado (também enviado como SNI) e o certificado precisa ter o uso estendido de servidor (serverAuth). Não há verificação de revogação: a CA é própria e não publica CRL (revogar = trocar o certificado do broker). Certificado inválido nunca é aceito fora de Development, e mesmo em Development só com `Mqtt:PermitirCertificadoInvalidoEmDesenvolvimento = true`.
 
+### Comandos de abertura
+
+O caso de uso `EnviarComandoAbertura` (`Application/Comandos`) lê o `deviceId` da estante, o número e o canal do cofre e o segredo HMAC, monta o comando com `MontadorComando` (função pura) e publica em `cofre/{deviceId}/cmd` (formato canônico em [../docs/ARQUITETURA.md](../docs/ARQUITETURA.md), "Formato canônico da assinatura"):
+
+- payload: `{ "commandId": "<uuid D minúsculo>", "cofre": 3, "canal": 5, "acao": "abrir", "ts": <segundos Unix UTC>, "assinatura": "<hex minúsculo, 64>" }`, exatamente esses 6 campos;
+- assinatura: HMAC-SHA256 de `deviceId|commandId|cofre|canal|acao|ts` (UTF-8, cultura invariante), com os **bytes** do segredo como chave (não o texto hex). O `deviceId` não vai no payload.
+
+Vetor de teste (somente para testes, coberto por `MontadorComandoTests`): segredo `000102…1e1f` (bytes 0x00 a 0x1f), `deviceId` `est-7k2m9q`, `commandId` `3f2504e0-4f89-41d3-9a0c-0305e82c3301`, cofre 3, canal 5, `abrir`, ts `1760000000` → mensagem `est-7k2m9q|3f2504e0-4f89-41d3-9a0c-0305e82c3301|3|5|abrir|1760000000` → assinatura `738bc5aa34868b4e0003d424e6a818535303396cc50f46a50279a47f1dce5f4d`.
+
+**Nunca reenviar comando** após MQTT indisponível ou timeout (resultado incerto: o comando pode ter chegado). Cada tentativa do usuário gera um novo `commandId`. O caso de uso não aplica regras de status (estante ativa, cofre em manutenção etc.): isso é de quem chama.
+
 ## Banco de dados (PostgreSQL)
 
 A string de conexão `ConnectionStrings:Cofre` **nunca** vai para `appsettings*.json`. Os valores abaixo batem com o `docker-compose.yml` da raiz (`POSTGRES_DB` e `POSTGRES_USER` = `cofre`, porta 5432 em 127.0.0.1); a senha é a do seu `.env`.

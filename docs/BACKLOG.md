@@ -144,7 +144,7 @@ Critérios de aceite:
 | Nº Tarefa | Tarefa | Componente | Prioridade | Sprint | Pts | Status |
 |---|---|---|---|---|---|---|
 | T-0601 | MqttService (MQTTnet) como IHostedService com reconexão automática e TLS | Backend | P1 | 2 | 3 | Concluído |
-| T-0602 | Publicar comando com commandId, expiração e assinatura HMAC | Backend | P1 | 2 | 2 | A fazer |
+| T-0602 | Publicar comando com commandId, expiração e assinatura HMAC | Backend | P1 | 2 | 2 | Concluído |
 | T-0603 | Assinar ack e correlacionar com comando pendente (TaskCompletionSource + timeout) | Backend | P1 | 3 | 3 | A fazer |
 | T-0604 | Assinar estado e online → atualizar status de cofre/estante e heartbeat | Backend | P1 | 3 | 2 | A fazer |
 | T-0605 | Persistir comandos/eventos em eventos_cofre | Backend | P1 | 3 | 1 | A fazer |

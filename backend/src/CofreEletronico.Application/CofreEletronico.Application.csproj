@@ -9,4 +9,9 @@
     <ProjectReference Include="..\CofreEletronico.Domain\CofreEletronico.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Testes do formato canônico do comando (mensagem e assinatura de ComandoAssinado são internas). -->
+    <InternalsVisibleTo Include="CofreEletronico.Application.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -1,6 +1,7 @@
 using CofreEletronico.Application.Autenticacao;
 using CofreEletronico.Application.Autorizacao;
 using CofreEletronico.Application.Cofres;
+using CofreEletronico.Application.Comandos;
 using CofreEletronico.Application.Estantes;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -42,6 +43,9 @@ public static class DependencyInjection
         services.AddScoped<ReativarCofre>();
         services.AddScoped<ColocarCofreEmManutencao>();
         services.AddScoped<RetirarCofreDaManutencao>();
+
+        // Comandos MQTT de abertura (T-0602)
+        services.AddScoped<EnviarComandoAbertura>();
 
         return services;
     }

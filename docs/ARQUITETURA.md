@@ -74,10 +74,28 @@ Regras de segurança dos comandos:
 - O ESP32 rejeita (sem acionar relé):
   - assinatura inválida, incluindo a calculada com outro `deviceId` (o ESP32 assina com o seu próprio `device_id`, então comando destinado a outra estante falha na verificação);
   - `canal` fora de 0 a 15;
-  - `ts` fora da janela (ex.: 30 s);
+  - `ts` fora da janela de 30 s;
   - `commandId` já processado;
   - `cmd` recebido com a flag retain (descartado).
 - O backend espera o `ack` por até 10 s. Sem resposta, devolve timeout ao app e registra o evento.
+
+Formato canônico da assinatura (backend e firmware devem produzir exatamente os mesmos bytes):
+- `commandId`: UUID em minúsculas, com hífens (formato 8-4-4-4-12, 36 caracteres), gerado aleatoriamente pelo backend a cada comando.
+- `ts`: segundos desde a época Unix em UTC (inteiro). Backend e ESP32 precisam de relógio sincronizado (NTP). A janela de aceitação é de 30 s.
+- `cofre` e `canal`: inteiros em decimal, sem zeros à esquerda e sem sinal.
+- `acao`: `abrir` (único valor por enquanto).
+- Mensagem assinada: a concatenação `deviceId|commandId|cofre|canal|acao|ts` separada por `|` (sem espaços), codificada em UTF-8.
+- Chave: os 32 bytes do segredo da estante. O segredo é entregue ao admin em hex (64 caracteres); o firmware deve **decodificar o hex para bytes** e usar os bytes como chave, e **não** o texto hex.
+- `assinatura`: HMAC-SHA256 da mensagem, em hex minúsculo (64 caracteres). O ESP32 compara a assinatura em tempo constante.
+- Os campos do JSON do comando são exatamente `commandId`, `cofre`, `canal`, `acao`, `ts` e `assinatura` (a ordem no JSON não importa).
+
+Vetor de teste (conferido com HMAC-SHA256). **Somente para testes: este segredo nunca deve ser usado como segredo real de estante.**
+- segredo (hex): `000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f`
+- `deviceId`: `est-7k2m9q`
+- `commandId`: `3f2504e0-4f89-41d3-9a0c-0305e82c3301`
+- `cofre`: `3`, `canal`: `5`, `acao`: `abrir`, `ts`: `1760000000`
+- mensagem: `est-7k2m9q|3f2504e0-4f89-41d3-9a0c-0305e82c3301|3|5|abrir|1760000000`
+- assinatura esperada: `738bc5aa34868b4e0003d424e6a818535303396cc50f46a50279a47f1dce5f4d`
 
 ## Contrato REST: autenticação
 

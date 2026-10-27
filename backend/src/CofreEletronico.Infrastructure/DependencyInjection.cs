@@ -1,5 +1,6 @@
 using CofreEletronico.Application.Autenticacao.Portas;
 using CofreEletronico.Application.Cofres.Portas;
+using CofreEletronico.Application.Comandos.Portas;
 using CofreEletronico.Application.Estantes.Portas;
 using CofreEletronico.Application.Mqtt.Portas;
 using CofreEletronico.Infrastructure.Autenticacao;
@@ -93,6 +94,7 @@ public static class DependencyInjection
         services.AddSingleton<IGeradorCredenciaisEstante, GeradorCredenciaisEstanteSeguro>();
         services.AddScoped<IEstanteRepositorio, EstanteRepositorio>();
         services.AddScoped<ICofreRepositorio, CofreRepositorio>();
+        services.AddScoped<IDadosComandoRepositorio, DadosComandoRepositorio>();
     }
 
     private static void AddMqtt(IServiceCollection services, IConfiguration configuration)
