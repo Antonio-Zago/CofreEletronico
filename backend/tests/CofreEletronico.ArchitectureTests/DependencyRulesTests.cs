@@ -61,6 +61,13 @@ public class DependencyRulesTests
     }
 
     [Fact]
+    public void Application_nao_depende_de_MQTTnet()
+    {
+        // A Application só conhece a porta IClienteMqtt; o MQTTnet fica atrás do adaptador da Infrastructure.
+        AssertSemDependencia(ApplicationAssembly, "MQTTnet");
+    }
+
+    [Fact]
     public void DTOs_da_Application_nao_expoem_tipos_do_Domain()
     {
         // "Nunca devolva entidade de domínio em endpoint": os DTOs (o que a Api serializa) só carregam tipos simples

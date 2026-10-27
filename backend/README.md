@@ -17,7 +17,7 @@ src/
 tests/
   CofreEletronico.Domain.Tests
   CofreEletronico.Application.Tests
-  CofreEletronico.Infrastructure.Tests  # modelo EF (sem banco), DI do Identity, JWT, refresh token e cifrador
+  CofreEletronico.Infrastructure.Tests  # modelo EF (sem banco), DI do Identity, JWT, refresh token, cifrador e serviço MQTT (adaptador falso)
   CofreEletronico.Api.Tests          # endpoints via WebApplicationFactory (portas de banco trocadas por fakes)
   CofreEletronico.ArchitectureTests  # garante a regra de dependência (NetArchTest)
 tools/EspSimulator                   # (futuro, T-0607) simulador de ESP32
@@ -54,7 +54,7 @@ dotnet run --project src/CofreEletronico.Api
 
 Em Development o Swagger fica em `/swagger`. Endpoint de teste: `GET /ping` (anônimo).
 
-A Api **não sobe** sem `Jwt:ChaveAssinatura` e sem `Criptografia:ChaveSegredos` (ver as seções abaixo).
+A Api **não sobe** sem `Jwt:ChaveAssinatura` e sem `Criptografia:ChaveSegredos` (ver as seções abaixo). O MQTT é opcional (seção "MQTT").
 
 ## Autenticação (JWT)
 
@@ -222,6 +222,56 @@ export Criptografia__ChaveSegredos="<chave gerada>"
 ```
 
 > **Atenção: guarde a chave em local seguro (cofre de senhas/segredos) e faça backup.** Perder a chave torna os segredos gravados **irrecuperáveis**: seria preciso gerar um novo segredo para cada estante, regravá-lo no banco e reprovisioná-lo no ESP32 correspondente. Trocar a chave tem o mesmo efeito (a rotação com recifragem ainda não existe; o prefixo `v1:` está aí para permitir isso no futuro). Use uma chave diferente por ambiente.
+
+## MQTT
+
+A Api mantém **uma** conexão com o broker Mosquitto (MQTTnet 5, protocolo MQTT 5.0, usuário `backend`), usada para publicar comandos em `cofre/{deviceId}/cmd` e assinar `ack`, `estado` e `online` (contrato em [../docs/ARQUITETURA.md](../docs/ARQUITETURA.md), "Contrato MQTT").
+
+- **Sem `Mqtt:Host`** (padrão do `appsettings.json`): o MQTT fica desabilitado, com um log informativo na subida. A Api funciona normalmente, mas comandos aos ESP32 ficam indisponíveis.
+- **Com `Mqtt:Host`**: a conexão é feita em background. A Api sobe mesmo com o broker fora do ar; cada falha gera um warning com o número da tentativa e o próximo intervalo (backoff exponencial de 1 s a 60 s, com jitter), e a reconexão continua indefinidamente. Ao reconectar, todas as assinaturas são refeitas.
+- O backend só publica em `cofre/{deviceId}/cmd`, sempre sem retenção (a porta `IClienteMqtt.PublicarComandoAsync` recebe o `deviceId`, não o tópico). Publicar sem conexão falha na hora (não há fila): um comando de abertura entregue atrasado seria perigoso.
+- Conexão que cai antes de `Mqtt:LimiteConexaoEstavelSegundos` (30 s) conta como falha: a reconexão espera o backoff, que cresce a cada queda rápida.
+- Usuário ou senha recusados pelo broker (`BadUserNameOrPassword`, `NotAuthorized`, `ClientIdentifierNotValid`): **erro** no log na 1ª recusa e a cada 10, e novas tentativas no intervalo máximo (60 s).
+
+| Chave | Padrão | Observação |
+|---|---|---|
+| `Mqtt:Host` | vazio | vazio = desabilitado |
+| `Mqtt:Porta` | 1883 | 1 a 65535 |
+| `Mqtt:Usuario` | `backend` | também é o ClientId |
+| `Mqtt:Senha` | — | **segredo**, obrigatória com `Host`; só user-secrets ou `Mqtt__Senha` |
+| `Mqtt:UsarTls` | false | TLS 1.2+ |
+| `Mqtt:CaminhoCertificadoCa` | vazio | CA do broker (PEM, podendo ter raiz + intermediários, ou DER); precisa existir e conter a raiz |
+| `Mqtt:PermitirCertificadoInvalidoEmDesenvolvimento` | false | só aceito no ambiente Development; ligada, gera warning na subida |
+| `Mqtt:KeepAliveSegundos` | 30 | 1 a 120 (`max_keepalive` do broker) |
+| `Mqtt:ReconexaoInicialSegundos` / `Mqtt:ReconexaoMaximaSegundos` | 1 / 60 | backoff entre tentativas |
+| `Mqtt:TimeoutSegundos` | 10 | conexão e respostas do broker (CONNACK, PUBACK, SUBACK) |
+| `Mqtt:LimiteConexaoEstavelSegundos` | 30 | conexão mais curta que isso conta como falha (1 a 3600) |
+
+Opções inválidas (porta fora da faixa, keepalive acima de 120, `Host` sem `Senha`, CA inexistente etc.) impedem a subida, com mensagem que nunca mostra a senha.
+
+1. Crie o usuário `backend` no broker, na raiz do repositório, e cole a senha no prompt (a digitação não ecoa; vazio gera uma senha aleatória exibida uma vez). Recarregue o broker em seguida com `docker compose kill -s HUP mosquitto`:
+
+   ```bash
+   infra/mosquitto/criar-usuario.sh backend
+   ```
+
+2. Configure a Api. Desenvolvimento local (user-secrets), dentro de `backend/`:
+
+   ```bash
+   dotnet user-secrets set "Mqtt:Host" "127.0.0.1" --project src/CofreEletronico.Api
+   dotnet user-secrets set "Mqtt:Porta" "1883" --project src/CofreEletronico.Api
+   dotnet user-secrets set "Mqtt:Senha" "<senha do usuário backend>" --project src/CofreEletronico.Api
+   ```
+
+   Servidor, contêiner ou CI (variáveis de ambiente): `Mqtt__Host`, `Mqtt__Porta` e `Mqtt__Senha`.
+
+> **Servidor do projeto:** lá o broker em contêiner é publicado na porta **1884** (`MQTT_PORT=1884` no `.env`), então use `Mqtt:Porta = 1884`.
+
+**Uma instância por usuário MQTT.** O broker usa `use_username_as_clientid true`: o ClientId passa a ser o username, e uma segunda conexão com o usuário `backend` derruba a primeira (as duas instâncias ficariam se derrubando em ciclo). Rode só **uma** instância da Api com o usuário `backend`. Se isso acontecer, o log mostra o erro "Outra instância está usando o usuário MQTT backend" e as reconexões passam a esperar o backoff crescente. Para escalar horizontalmente, é preciso um usuário MQTT (com a mesma ACL) por instância.
+
+**Sessão:** clean start, sem sessão persistente no broker. Um `ack` antigo não serve (o backend já respondeu timeout depois de 10 s), `estado`/`online` são retained (o broker reenvia o último valor ao assinar) e as assinaturas são refeitas a cada conexão.
+
+**TLS (T-0608):** hoje o listener do broker é 1883 sem TLS. Quando o listener 8883 for habilitado, use `Mqtt:UsarTls = true`, `Mqtt:Porta = 8883` e, se o certificado do broker for emitido por CA própria, `Mqtt:CaminhoCertificadoCa` com o certificado da CA. Nesse caso, só as raízes do arquivo são âncoras de confiança (o repositório do sistema é ignorado); intermediários vêm do arquivo e da cadeia enviada pelo broker; sem o arquivo, vale o repositório de confiança do sistema. O nome em `Mqtt:Host` precisa constar no certificado (também enviado como SNI) e o certificado precisa ter o uso estendido de servidor (serverAuth). Não há verificação de revogação: a CA é própria e não publica CRL (revogar = trocar o certificado do broker). Certificado inválido nunca é aceito fora de Development, e mesmo em Development só com `Mqtt:PermitirCertificadoInvalidoEmDesenvolvimento = true`.
 
 ## Banco de dados (PostgreSQL)
 

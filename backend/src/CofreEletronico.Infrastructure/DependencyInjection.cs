@@ -1,10 +1,12 @@
 using CofreEletronico.Application.Autenticacao.Portas;
 using CofreEletronico.Application.Cofres.Portas;
 using CofreEletronico.Application.Estantes.Portas;
+using CofreEletronico.Application.Mqtt.Portas;
 using CofreEletronico.Infrastructure.Autenticacao;
 using CofreEletronico.Infrastructure.Autorizacao;
 using CofreEletronico.Infrastructure.Criptografia;
 using CofreEletronico.Infrastructure.Estantes;
+using CofreEletronico.Infrastructure.Mqtt;
 using CofreEletronico.Infrastructure.Persistencia;
 using CofreEletronico.Infrastructure.Persistencia.Identity;
 using CofreEletronico.Infrastructure.Persistencia.Repositorios;
@@ -48,6 +50,7 @@ public static class DependencyInjection
         AddAutenticacao(services, configuration);
         AddAdminInicial(services, configuration);
         AddEstantes(services);
+        AddMqtt(services, configuration);
 
         return services;
     }
@@ -90,6 +93,23 @@ public static class DependencyInjection
         services.AddSingleton<IGeradorCredenciaisEstante, GeradorCredenciaisEstanteSeguro>();
         services.AddScoped<IEstanteRepositorio, EstanteRepositorio>();
         services.AddScoped<ICofreRepositorio, CofreRepositorio>();
+    }
+
+    private static void AddMqtt(IServiceCollection services, IConfiguration configuration)
+    {
+        // Sem Mqtt:Host o serviço fica inativo (a Api sobe sem broker). Com Host, Mqtt:Senha é obrigatória
+        // (user-secrets ou Mqtt__Senha) e a validação acontece na subida.
+        services.AddOptions<MqttOpcoes>()
+            .Bind(configuration.GetSection(MqttOpcoes.Secao))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<MqttOpcoes>, MqttOpcoesValidador>();
+
+        // Uma conexão por processo: o adaptador e o serviço são singletons, e o mesmo objeto é a porta
+        // IClienteMqtt e o hosted service (conexão/reconexão em background).
+        services.AddSingleton<IAdaptadorMqtt, AdaptadorMqttNet>();
+        services.AddSingleton<ServicoMqtt>();
+        services.AddSingleton<IClienteMqtt>(sp => sp.GetRequiredService<ServicoMqtt>());
+        services.AddHostedService(sp => sp.GetRequiredService<ServicoMqtt>());
     }
 
     private static void AddAdminInicial(IServiceCollection services, IConfiguration configuration)

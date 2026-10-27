@@ -8,11 +8,17 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <PackageReference Include="MQTTnet" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CofreEletronico.Application\CofreEletronico.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Testes de unidade do serviço MQTT (adaptador, backoff e validação TLS são internos). -->
+    <InternalsVisibleTo Include="CofreEletronico.Infrastructure.Tests" />
   </ItemGroup>
 
 </Project>
